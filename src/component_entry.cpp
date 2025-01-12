@@ -137,7 +137,7 @@ namespace stkq
         }
     }
 
-    void ComponentGeoGraphRefineEntryCentroid::EntryInner()
+    void ComponentDEGRefineEntryCentroid::EntryInner()
     {
         auto *emb_center = new float[index->getBaseEmbDim()];
         for (unsigned j = 0; j < index->getBaseEmbDim(); j++)
@@ -171,20 +171,20 @@ namespace stkq
             loc_center[j] /= index->getBaseLen();
         }
 
-        std::vector<Index::GeoGraphNNDescentNeighbor> tmp, pool;
+        std::vector<Index::DEGNNDescentNeighbor> tmp, pool;
         index->ep_ = rand() % index->getBaseLen(); // random initialize navigating point
         get_neighbors(emb_center, loc_center, tmp, pool);
         // for (int i = 0; i < tmp.size(); i++)
         // {
         //     if (tmp[i].layer_ == 0)
-        //         index->geograph_enterpoints.push_back(tmp[i].id_);
+        //         index->DEG_enterpoints.push_back(tmp[i].id_);
         //     else
         //         break;
         // }
     }
 
-    void ComponentGeoGraphRefineEntryCentroid::get_neighbors(const float *query_emb, const float *query_loc, std::vector<Index::GeoGraphNNDescentNeighbor> &retset,
-                                                             std::vector<Index::GeoGraphNNDescentNeighbor> &fullset)
+    void ComponentDEGRefineEntryCentroid::get_neighbors(const float *query_emb, const float *query_loc, std::vector<Index::DEGNNDescentNeighbor> &retset,
+                                                             std::vector<Index::DEGNNDescentNeighbor> &fullset)
     {
         unsigned L = index->L_refine;
         // 从index的参数中获取L_refine值

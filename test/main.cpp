@@ -36,39 +36,6 @@ void NSW(stkq::Parameters &parameters)
     }
 }
 
-void NSWV2(stkq::Parameters &parameters)
-{
-    const unsigned num_threads = parameters.get<unsigned>("n_threads");
-    std::string base_emb_path = parameters.get<std::string>("base_emb_path");
-    std::string base_loc_path = parameters.get<std::string>("base_loc_path");
-    std::string query_emb_path = parameters.get<std::string>("query_emb_path");
-    std::string query_loc_path = parameters.get<std::string>("query_loc_path");
-    std::string ground_path = parameters.get<std::string>("ground_path");
-    std::string graph_file = parameters.get<std::string>("graph_file");
-    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
-
-    if (parameters.get<std::string>("exc_type") == "build")
-    {
-        // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_NSW)
-            ->save_graph(stkq::TYPE::INIT_NSW, &graph_file[0]);
-        std::cout << "Build cost: " << builder->GetBuildTime().count() << std::endl;
-    }
-    else if (parameters.get<std::string>("exc_type") == "search")
-    {
-        // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->load_graph(stkq::TYPE::INDEX_NSWV2, &graph_file[0])
-            ->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_NSW, stkq::TYPE::L_SEARCH_ASCEND, parameters);
-        builder->peak_memory_footprint();
-    }
-    else
-    {
-        std::cout << "exc_type input error!" << std::endl;
-    }
-}
-
 void HNSW(stkq::Parameters &parameters)
 {
     const unsigned num_threads = parameters.get<unsigned>("n_threads");
@@ -241,33 +208,33 @@ void baseline3(stkq::Parameters &parameters)
     }
 }
 
-void NSG(stkq::Parameters &parameters)
+void baseline4(stkq::Parameters &parameters)
 {
     const unsigned num_threads = parameters.get<unsigned>("n_threads");
     std::string base_emb_path = parameters.get<std::string>("base_emb_path");
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
-    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
+    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"), true);
 
     if (parameters.get<std::string>("exc_type") == "build")
     {
         // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_RANDOM)
-            ->refine(stkq::REFINE_NN_DESCENT, false);
-        std::cout << "Init cost: " << builder->GetBuildTime().count() << std::endl;
-        builder->refine(stkq::REFINE_NSG, false)
-            ->save_graph(stkq::TYPE::INDEX_NSG, &graph_file[0]);
-        std::cout << "Build cost: " << builder->GetBuildTime().count() << std::endl;
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
+            ->init(stkq::INIT_BS4)
+            ->save_graph(stkq::TYPE::INDEX_BS4, &graph_file[0]);    
+        std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
     }
+
     else if (parameters.get<std::string>("exc_type") == "search")
-    { // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->load_graph(stkq::TYPE::INDEX_NSG, &graph_file[0])
-            ->search(stkq::TYPE::SEARCH_ENTRY_CENTROID, stkq::TYPE::ROUTER_GREEDY, stkq::TYPE::L_SEARCH_ASCEND, parameters);
+    {
+        // search
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
+            ->load_graph(stkq::TYPE::INDEX_BS4, &graph_file[0])
+            ->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_BS4, stkq::TYPE::L_SEARCH_ASCEND, parameters);
         builder->peak_memory_footprint();
     }
     else
@@ -276,7 +243,7 @@ void NSG(stkq::Parameters &parameters)
     }
 }
 
-void GeoGraph(stkq::Parameters &parameters)
+void DEG(stkq::Parameters &parameters)
 {
     const unsigned num_threads = parameters.get<unsigned>("n_threads");
     std::string base_emb_path = parameters.get<std::string>("base_emb_path");
@@ -290,8 +257,8 @@ void GeoGraph(stkq::Parameters &parameters)
     {
         // build
         builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_GEO_RNG)
-            ->save_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
+            ->init(stkq::INIT_DEG)
+            ->save_graph(stkq::TYPE::INDEX_DEG, &graph_file[0]);
         std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
     }
     else if (parameters.get<std::string>("exc_type") == "search")
@@ -299,78 +266,9 @@ void GeoGraph(stkq::Parameters &parameters)
         // search
         builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters);
         builder->peak_memory_footprint();
-        builder->load_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
+        builder->load_graph(stkq::TYPE::INDEX_DEG, &graph_file[0]);
         builder->peak_memory_footprint();
-        builder->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_GEOGRAPH, stkq::TYPE::L_SEARCH_ASCEND, parameters);
-        builder->peak_memory_footprint();
-    }
-    else
-    {
-        std::cout << "exc_type input error!" << std::endl;
-    }
-}
-
-void GeoGraph2(stkq::Parameters &parameters)
-{
-    const unsigned num_threads = parameters.get<unsigned>("n_threads");
-    std::string base_emb_path = parameters.get<std::string>("base_emb_path");
-    std::string base_loc_path = parameters.get<std::string>("base_loc_path");
-    std::string query_emb_path = parameters.get<std::string>("query_emb_path");
-    std::string query_loc_path = parameters.get<std::string>("query_loc_path");
-    std::string ground_path = parameters.get<std::string>("ground_path");
-    std::string graph_file = parameters.get<std::string>("graph_file");
-    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
-    if (parameters.get<std::string>("exc_type") == "build")
-    {
-        // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_GEO_RNG2)
-            ->save_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
-        std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
-    }
-    else if (parameters.get<std::string>("exc_type") == "search")
-    {
-        // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters);
-        builder->peak_memory_footprint();
-        builder->load_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
-        builder->peak_memory_footprint();
-        builder->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_GEOGRAPH, stkq::TYPE::L_SEARCH_ASCEND, parameters);
-        builder->peak_memory_footprint();
-    }
-    else
-    {
-        std::cout << "exc_type input error!" << std::endl;
-    }
-}
-
-
-void GeoGraph3(stkq::Parameters &parameters)
-{
-    const unsigned num_threads = parameters.get<unsigned>("n_threads");
-    std::string base_emb_path = parameters.get<std::string>("base_emb_path");
-    std::string base_loc_path = parameters.get<std::string>("base_loc_path");
-    std::string query_emb_path = parameters.get<std::string>("query_emb_path");
-    std::string query_loc_path = parameters.get<std::string>("query_loc_path");
-    std::string ground_path = parameters.get<std::string>("ground_path");
-    std::string graph_file = parameters.get<std::string>("graph_file");
-    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
-    if (parameters.get<std::string>("exc_type") == "build")
-    {
-        // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_GEO_RNG3)
-            ->save_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
-        std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
-    }
-    else if (parameters.get<std::string>("exc_type") == "search")
-    {
-        // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters);
-        builder->peak_memory_footprint();
-        builder->load_graph(stkq::TYPE::INDEX_GEOGRAPH, &graph_file[0]);
-        builder->peak_memory_footprint();
-        builder->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_GEOGRAPH, stkq::TYPE::L_SEARCH_ASCEND, parameters);
+        builder->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_DEG, stkq::TYPE::L_SEARCH_ASCEND, parameters);
         builder->peak_memory_footprint();
     }
     else
@@ -383,7 +281,7 @@ int main(int argc, char **argv)
 {
     // ./test/main baseline1 openimage 0.5 1 1 build
     // ./test/main baseline2 openimage 0.5 1 1 build
-    // ./test/main geograph openimage 0.5 1 1 build
+    // ./test/main DEG openimage 0.5 1 1 build
 
     if (argc != 7)
     {
@@ -424,10 +322,6 @@ int main(int argc, char **argv)
     {
         NSW(parameters);
     }
-    else if (alg == "nswv2")
-    {
-        NSWV2(parameters);
-    }
     else if (alg == "hnsw")
     {
         HNSW(parameters);
@@ -448,13 +342,13 @@ int main(int argc, char **argv)
     {
         baseline3(parameters);
     }
-    else if (alg == "geograph")
+    else if (alg == "baseline4")
     {
-        GeoGraph(parameters);
-    }else if (alg == "geograph2"){
-        GeoGraph2(parameters);        
-    }else if (alg == "geograph3"){
-        GeoGraph3(parameters);        
+        baseline4(parameters);
+    }
+    else if (alg == "DEG")
+    {
+        DEG(parameters);
     }
     else
     {

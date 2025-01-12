@@ -1,7 +1,3 @@
-//
-// Created by MurphySL on 2020/10/23.
-//
-
 #include "component.h"
 
 namespace stkq
@@ -20,7 +16,6 @@ namespace stkq
         while (k < (int)L)
         {
             int nk = L;
-
             if (pool[k].flag)
             {
                 pool[k].flag = false;
@@ -188,7 +183,8 @@ namespace stkq
                                               std::vector<unsigned int> &res)
     {
 
-        const auto K = index->getParam().get<unsigned>("K_search"); // 获取K_search参数来确定搜索结果的数量
+        const auto K = index->getParam().get<unsigned>("K_search"); 
+        // 获取K_search参数来确定搜索结果的数量
 
         // const auto L = index->getParam().get<unsigned>("L_search");
 
@@ -414,7 +410,7 @@ namespace stkq
         }
     }
 
-    void ComponentSearchRouteGeoGraph::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
+    void ComponentSearchRouteDEG::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
                                                   std::vector<unsigned int> &res)
     {
         const auto K = index->getParam().get<unsigned>("K_search");
@@ -423,182 +419,15 @@ namespace stkq
         visited_list->Reset();
         unsigned visited_mark = visited_list->GetVisitMark();
         unsigned int *visited = visited_list->GetVisited();
-        // Index::GeoGraphNode *cur_node = index->geograph_enterpoint_;
-        // Index::GeoGraphNode *cur_node = index->geograph_nodes_[10000];
+        
+        std::priority_queue<Index::DEG_FurtherFirst> result;
+        std::priority_queue<Index::DEG_CloserFirst> tmp;
 
-        // float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + query * index->getBaseEmbDim(),
-        //                                          index->getBaseEmbData() + cur_node->GetId() * index->getBaseEmbDim(),
-        //                                          index->getBaseEmbDim());
-
-        // float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + query * index->getBaseLocDim(),
-        //                                          index->getBaseLocData() + cur_node->GetId() * index->getBaseLocDim(),
-        //                                          index->getBaseLocDim());
-
-        // float cur_dist = alpha * e_d + (1 - alpha) * s_d;
-        // std::vector<std::pair<Index::GeoGraphNode *, float>> ensure_k_path_;
-        // ensure_k_path_.clear();
-        // ensure_k_path_.emplace_back(cur_node, cur_dist);
-        // index->addDistCount();
-        // visited[cur_node->GetId()] = visited_mark;
-
-        // e_d = index->get_E_Dist()->compare(index->getBaseEmbData() + index->geograph_enterpoint_->GetId() * index->getBaseEmbDim(),
-        //                                                 index->getBaseEmbData() + cur_node->GetId() * index->getBaseEmbDim(),
-        //                                                 index->getBaseEmbDim());
-
-        // s_d = index->get_S_Dist()->compare(index->getBaseLocData() + index->geograph_enterpoint_->GetId() * index->getBaseLocDim(),
-        //                                                 index->getBaseLocData() + cur_node->GetId() * index->getBaseLocDim(),
-        //                                                 index->getBaseLocDim());
-
-        // std::cout << "e_d: " << e_d << "s_d: " << s_d << std::endl;
-
-        // exit(1);
-
-        // const std::vector<unsigned> &enterpoint_set = index->enterpoint_set;
-        // for (int i = 0; i < enterpoint_set.size(); i++)
-        // {
-        //     cur_node = index->geograph_nodes_[enterpoint_set[i]];
-
-        //     visited[cur_node->GetId()] = visited_mark;
-
-        //     float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + query * index->getBaseEmbDim(),
-        //                                              index->getBaseEmbData() + cur_node->GetId() * index->getBaseEmbDim(),
-        //                                              index->getBaseEmbDim());
-
-        //     float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + query * index->getBaseLocDim(),
-        //                                              index->getBaseLocData() + cur_node->GetId() * index->getBaseLocDim(),
-        //                                              index->getBaseLocDim());
-
-        //     float dist = alpha * e_d + (1 - alpha) * s_d;
-        //     if (dist < cur_dist){
-        //         ensure_k_path_.emplace_back(cur_node, dist);
-        //         cur_dist = dist;
-        //     }
-        //     index->addDistCount();
-        // }
-
-        // cur_node = ensure_k_path_.back().first;
-
-        // bool changed = true;
-        // while (changed)
-        // {
-        //     changed = false;
-        //     std::unique_lock<std::mutex> local_lock(cur_node->GetAccessGuard());
-        //     const std::vector<Index::GeoGraphNeighbor> &neighbors = cur_node->GetFriends(0);
-        //     index->addHopCount();
-        //     for (auto iter = neighbors.begin(); iter != neighbors.end(); ++iter)
-        //     {
-        //         if (iter->layer_ != 0)
-        //         {
-        //             break;
-        //         }
-
-        //         const std::vector<std::pair<float, float>> &use_range = iter->available_range;
-        //         bool search_flag = false;
-        //         for (int i = 0; i < use_range.size(); i++)
-        //         {
-        //             if (alpha >= use_range[i].first && alpha <= use_range[i].second)
-        //             {
-        //                 search_flag = true;
-        //                 break;
-        //             }
-        //             if (alpha < use_range[i].first)
-        //             {
-        //                 break;
-        //             }
-        //             if (alpha > use_range[i].second)
-        //             {
-        //                 continue;
-        //             }
-        //         }
-        //         if (search_flag)
-        //         {
-        //             if (visited[iter->id_] != visited_mark)
-        //             {
-        //                 visited[iter->id_] = visited_mark;
-
-        //                 float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + query * index->getBaseEmbDim(),
-        //                                                          index->getBaseEmbData() + iter->id_ * index->getBaseEmbDim(),
-        //                                                          index->getBaseEmbDim());
-
-        //                 float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + query * index->getBaseLocDim(),
-        //                                                          index->getBaseLocData() + iter->id_ * index->getBaseLocDim(),
-        //                                                          index->getBaseLocDim());
-
-        //                 float d = alpha * e_d + (1 - alpha) * s_d;
-
-        //                 index->addDistCount();
-        //                 if (d < cur_dist)
-        //                 {
-        //                     cur_dist = d;
-        //                     cur_node = index->geograph_nodes_[iter->id_];
-        //                     changed = true;
-        //                     ensure_k_path_.emplace_back(cur_node, cur_dist);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // for (auto i = index->max_level_; i >= 0; --i)
-        // {
-        //     visited_list->Reset();
-        //     unsigned visited_mark = visited_list->GetVisitMark();
-        //     unsigned int *visited = visited_list->GetVisited();
-        //     visited[cur_node->GetId()] = visited_mark;
-
-        //     bool changed = true;
-        //     while (changed)
-        //     {
-        //         changed = false;
-        //         std::unique_lock<std::mutex> local_lock(cur_node->GetAccessGuard());
-        //         const std::vector<Index::GeoGraphNeighbor> &neighbors = cur_node->GetFriends(i);
-        //         index->addHopCount();
-        //         for (auto iter = neighbors.begin(); iter != neighbors.end(); ++iter)
-        //         {
-        //             const std::vector<std::pair<float, float>> &use_range = iter->available_range;
-        //             bool search_flag = isInRange(index->get_alpha(), use_range);
-        //             if (search_flag)
-        //             {
-        //                 if (visited[iter->id_] != visited_mark)
-        //                 {
-        //                     visited[iter->id_] = visited_mark;
-
-        //                     e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + query * index->getBaseEmbDim(),
-        //                                                        index->getBaseEmbData() + iter->id_ * index->getBaseEmbDim(),
-        //                                                        index->getBaseEmbDim());
-
-        //                     s_d = index->get_S_Dist()->compare(index->getQueryLocData() + query * index->getBaseLocDim(),
-        //                                                        index->getBaseLocData() + iter->id_ * index->getBaseLocDim(),
-        //                                                        index->getBaseLocDim());
-
-        //                     d = index->get_alpha() * e_d + (1 - index->get_alpha()) * s_d;
-
-        //                     index->addDistCount();
-        //                     if (d < cur_dist)
-        //                     {
-        //                         cur_dist = d;
-        //                         cur_node = index->geograph_nodes_[iter->id_];
-        //                         changed = true;
-        //                         ensure_k_path_.emplace_back(cur_node, cur_dist);
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-        std::priority_queue<Index::GeoGraph_FurtherFirst> result;
-        std::priority_queue<Index::GeoGraph_CloserFirst> tmp;
-
-        // while (result.size() < K && !ensure_k_path_.empty())
-        // {
-        // cur_dist = ensure_k_path_.back().second;
-        SearchAtLayer(query, index->geograph_enterpoint_, 0, visited_list, result);
-        // ensure_k_path_.pop_back();
-        // }
+        SearchAtLayer(query, index->DEG_enterpoint_, 0, visited_list, result);
 
         while (!result.empty())
         {
-            tmp.push(Index::GeoGraph_CloserFirst(result.top().GetNode(), result.top().GetEmbDistance(), result.top().GetLocDistance(), result.top().GetDistance()));
+            tmp.push(Index::DEG_CloserFirst(result.top().GetNode(), result.top().GetEmbDistance(), result.top().GetLocDistance(), result.top().GetDistance()));
             result.pop();
         }
 
@@ -615,178 +444,20 @@ namespace stkq
         delete visited_list;
     }
 
-    // void ComponentSearchRouteGeoGraph::UpdateEnterpointSet()
-    // {
-    //     int K = 10; // enterpoint number
-    //     std::unique_lock<std::mutex> enterpoint_lock(index->enterpoint_mutex);
-    //     std::vector<Index::GeoGraphNode *> enterpoints;
-
-    //     enterpoints.push_back(index->geograph_nodes_[index->enterpoint_set[0]]);
-
-    //     std::vector<int> hop_count(index->geograph_nodes_.size(), std::numeric_limits<int>::max() - 1);
-    //     hop_count[index->enterpoint_set[0]] = 0;
-
-    //     while (enterpoints.size() < K)
-    //     {
-    //         std::queue<Index::GeoGraphNode *> to_visit;
-    //         to_visit.push(enterpoints.back());
-
-    //         while (!to_visit.empty())
-    //         {
-    //             Index::GeoGraphNode *current_node = to_visit.front();
-    //             to_visit.pop();
-    //             int current_hop = hop_count[current_node->GetId()];
-
-    //             for (auto &neighbor : current_node->GetFriends())
-    //             {
-    //                 Index::GeoGraphNode *neighbor_node = index->geograph_nodes_[neighbor.id_];
-    //                 int new_hop_count = current_hop + 1;
-
-    //                 if (new_hop_count < hop_count[neighbor_node->GetId()])
-    //                 {
-    //                     hop_count[neighbor_node->GetId()] = new_hop_count;
-    //                     to_visit.push(neighbor_node);
-    //                 }
-    //             }
-    //         }
-
-    //         // 找到距离最大化的节点作为新的中心点
-    //         int max_distance = 0;
-    //         Index::GeoGraphNode *new_center = nullptr;
-    //         for (size_t i = 0; i < index->enterpoint_set.size(); ++i)
-    //         {
-    //             int enterpoint_id = index->enterpoint_set[i];
-
-    //             if (hop_count[enterpoint_id] > max_distance && hop_count[enterpoint_id] != std::numeric_limits<int>::max())
-    //             {
-    //                 max_distance = hop_count[enterpoint_id];
-    //                 new_center = index->geograph_nodes_[enterpoint_id];
-    //             }
-
-    //             if (hop_count[i] == std::numeric_limits<int>::max())
-    //             {
-    //                 break;
-    //             }
-    //         }
-
-    //         if (new_center != nullptr)
-    //         {
-    //             enterpoints.push_back(new_center);
-    //             // 更新新enterpoint的hop_count为0
-    //             hop_count[new_center->GetId()] = 0;
-    //         }
-    //         else
-    //         {
-    //             break; // 如果找不到新的中心点，退出循环
-    //         }
-    //     }
-    //     index->geograph_enterpoints = enterpoints;
-    // }
-
-    void ComponentSearchRouteGeoGraph::SearchAtLayer(unsigned qnode, Index::GeoGraphNode *enterpoint, int level,
+    void ComponentSearchRouteDEG::SearchAtLayer(unsigned qnode, Index::DEGNode *enterpoint, int level,
                                                      Index::VisitedList *visited_list,
-                                                     std::priority_queue<Index::GeoGraph_FurtherFirst> &result)
+                                                     std::priority_queue<Index::DEG_FurtherFirst> &result)
     {
         const auto L = index->getParam().get<unsigned>("L_search");
 
-        std::priority_queue<Index::GeoGraph_CloserFirst> candidates;
+        std::priority_queue<Index::DEG_CloserFirst> candidates;
         float alpha = index->get_alpha();
         visited_list->Reset();
-
-        // std::vector<unsigned> nearby_enterpoint;
-
-        // Index::GeoGraphNode *cur_node = enterpoint;
-        // float cur_e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
-        //                                              index->getBaseEmbData() + cur_node->GetId() * index->getBaseEmbDim(),
-        //                                              index->getBaseEmbDim());
-
-        // float cur_s_d = index->get_S_Dist()->compare(index->getQueryLocData() + qnode * index->getBaseLocDim(),
-        //                                              index->getBaseLocData() + cur_node->GetId() * index->getBaseLocDim(),
-        //                                              index->getBaseLocDim());
-
-        // float cur_dist = alpha * cur_e_d + (1 - alpha) * cur_s_d;
-
-        // bool changed = true;
-        // while (changed)
-        // {
-        //     changed = false;
-        //     std::unique_lock<std::mutex> local_lock(cur_node->GetAccessGuard());
-        //     const std::vector<Index::GeoGraphNeighbor> &neighbors = cur_node->GetFriends(0);
-        //     index->addHopCount();
-        //     for (auto iter = neighbors.begin(); iter != neighbors.end(); ++iter)
-        //     {
-        //         if (iter->layer_ != 0)
-        //         {
-        //             break;
-        //         }
-
-        //         const std::vector<std::pair<float, float>> &use_range = iter->available_range;
-        //         bool search_flag = false;
-        //         for (int i = 0; i < use_range.size(); i++)
-        //         {
-        //             if (alpha >= use_range[i].first && alpha <= use_range[i].second)
-        //             {
-        //                 search_flag = true;
-        //                 break;
-        //             }
-        //             if (alpha < use_range[i].first)
-        //             {
-        //                 break;
-        //             }
-        //             if (alpha > use_range[i].second)
-        //             {
-        //                 continue;
-        //             }
-        //         }
-        //         if (search_flag)
-        //         {
-        //             if (visited_list->NotVisited(iter->id_))
-        //             {
-
-        //                 visited_list->MarkAsVisited(iter->id_);
-
-        //                 float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
-        //                                                          index->getBaseEmbData() + iter->id_ * index->getBaseEmbDim(),
-        //                                                          index->getBaseEmbDim());
-
-        //                 float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + qnode * index->getBaseLocDim(),
-        //                                                          index->getBaseLocData() + iter->id_ * index->getBaseLocDim(),
-        //                                                          index->getBaseLocDim());
-
-        //                 float d = alpha * e_d + (1 - alpha) * s_d;
-
-        //                 index->addDistCount();
-        //                 if (d < cur_dist)
-        //                 {
-        //                     cur_dist = d;
-        //                     cur_e_d = e_d;
-        //                     cur_s_d = s_d;
-        //                     cur_node = index->geograph_nodes_[iter->id_];
-        //                     changed = true;
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // index->addDistCount();
-        // result.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
-        // candidates.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
-        // nearby_enterpoint.emplace_back(cur_node->GetId());
-
         bool m_first = false;
-        // if (index->getBaseEmbDim() == index->getBaseLocDim())
-        // {
-        //     m_first = false;
-        // }
-        // else
-        // {
-        //     m_first = true;
-        // }
 
         for (int i = 0; i < index->enterpoint_set.size(); i++)
         {
-            Index::GeoGraphNode *cur_node = index->geograph_nodes_[index->enterpoint_set[i]];
+            Index::DEGNode *cur_node = index->DEG_nodes_[index->enterpoint_set[i]];
 
             float cur_e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
                                                          index->getBaseEmbData() + cur_node->GetId() * index->getBaseEmbDim(),
@@ -801,103 +472,22 @@ namespace stkq
 
             float cur_dist = alpha * cur_e_d + (1 - alpha) * cur_s_d;
 
-            // changed = true;
-            // while (changed)
-            // {
-            //     changed = false;
-            //     std::unique_lock<std::mutex> local_lock(cur_node->GetAccessGuard());
-            //     const std::vector<Index::GeoGraphNeighbor> &neighbors = cur_node->GetFriends(0);
-            //     index->addHopCount();
-            //     for (auto iter = neighbors.begin(); iter != neighbors.end(); ++iter)
-            //     {
-            //         if (iter->layer_ != 0)
-            //         {
-            //             break;
-            //         }
-
-            //         const std::vector<std::pair<float, float>> &use_range = iter->available_range;
-            //         bool search_flag = false;
-            //         for (int i = 0; i < use_range.size(); i++)
-            //         {
-            //             if (alpha >= use_range[i].first && alpha <= use_range[i].second)
-            //             {
-            //                 search_flag = true;
-            //                 break;
-            //             }
-            //             if (alpha < use_range[i].first)
-            //             {
-            //                 break;
-            //             }
-            //             if (alpha > use_range[i].second)
-            //             {
-            //                 continue;
-            //             }
-            //         }
-            //         if (search_flag)
-            //         {
-            //             if (visited_list->NotVisited(iter->id_))
-            //             {
-            //                 visited_list->MarkAsVisited(iter->id_);
-
-            //                 float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
-            //                                                          index->getBaseEmbData() + iter->id_ * index->getBaseEmbDim(),
-            //                                                          index->getBaseEmbDim());
-
-            //                 float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + qnode * index->getBaseLocDim(),
-            //                                                          index->getBaseLocData() + iter->id_ * index->getBaseLocDim(),
-            //                                                          index->getBaseLocDim());
-
-            //                 float d = alpha * e_d + (1 - alpha) * s_d;
-
-            //                 index->addDistCount();
-            //                 if (d < cur_dist)
-            //                 {
-            //                     cur_dist = d;
-            //                     cur_e_d = e_d;
-            //                     cur_s_d = s_d;
-            //                     cur_node = index->geograph_nodes_[iter->id_];
-            //                     changed = true;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-
-            // index->addDistCount();
-            // if (result.size() < 1 || result.top().GetDistance() > cur_dist)
-            // {
             result.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
             candidates.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
-            // nearby_enterpoint.emplace_back(cur_node->GetId());
-            // }
-            // result.emplace(index->geograph_nodes_[index->enterpoint_set[i]], e_d, s_d, d);
-            // candidates.emplace(index->geograph_nodes_[index->enterpoint_set[i]], e_d, s_d, d);
             visited_list->MarkAsVisited(cur_node->GetId());
         }
 
-        // visited_list->Reset();
-        // for (auto &id: nearby_enterpoint){
-        //     visited_list->MarkAsVisited(id);
-        // }
-        // step 1 search on layer 0
-        // const Index::GeoGraph_CloserFirst &candidate_node = candidates.top();
-        // while (!candidates.empty())
-        // {
-        //     candidates.pop();
-        // }
-        // candidates.push(candidate_node);
-
         while (!candidates.empty())
         {
-            const Index::GeoGraph_CloserFirst &candidate = candidates.top();
+            const Index::DEG_CloserFirst &candidate = candidates.top();
             float lower_bound = result.top().GetDistance();
             if (candidate.GetDistance() > lower_bound)
                 break;
 
-            Index::GeoGraphNode *candidate_node = candidate.GetNode();
+            Index::DEGNode *candidate_node = candidate.GetNode();
             std::unique_lock<std::mutex> lock(candidate_node->GetAccessGuard());
-            // const std::vector<std::shared_ptr<Index::GeoGraphEdge>> &neighbors = candidate_node->GetFriends();
-            std::vector<Index::GeoGraphSimpleNeighbor> &neighbors = candidate_node->GetSearchFriends();
+            // const std::vector<std::shared_ptr<Index::DEGEdge>> &neighbors = candidate_node->GetFriends();
+            std::vector<Index::DEGSimpleNeighbor> &neighbors = candidate_node->GetSearchFriends();
             candidates.pop();
             index->addHopCount();
             for (const auto &neighbor : neighbors)
@@ -922,8 +512,6 @@ namespace stkq
                     }
                 }
                 
-                // search_flag = true;
-
                 if (search_flag)
                 {
                     if (visited_list->NotVisited(neighbor_id))
@@ -954,8 +542,8 @@ namespace stkq
 
                                 if (threshold > d)
                                 {
-                                    result.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
-                                    candidates.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
+                                    result.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
+                                    candidates.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
                                     if (result.size() > L)
                                         result.pop();
                                 }
@@ -984,8 +572,8 @@ namespace stkq
 
                                     if (threshold > d)
                                     {
-                                        result.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
-                                        candidates.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
+                                        result.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
+                                        candidates.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
                                         if (result.size() > L)
                                             result.pop();
                                     }
@@ -1011,8 +599,8 @@ namespace stkq
 
                                     if (threshold > d)
                                     {
-                                        result.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
-                                        candidates.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
+                                        result.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
+                                        candidates.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
                                         if (result.size() > L)
                                             result.pop();
                                     }
@@ -1029,8 +617,8 @@ namespace stkq
                                                                      index->getBaseEmbData() + neighbor_id * index->getBaseEmbDim(),
                                                                      index->getBaseEmbDim());
                             float d = alpha * e_d + (1 - alpha) * s_d;
-                            result.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
-                            candidates.emplace(index->geograph_nodes_[neighbor_id], e_d, s_d, d);
+                            result.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
+                            candidates.emplace(index->DEG_nodes_[neighbor_id], e_d, s_d, d);
                             if (result.size() > L)
                                 result.pop();
                         }
@@ -1039,65 +627,4 @@ namespace stkq
             }
         }
     }
-
-    // void ComponentSearchRouteGuided::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
-    //                                             std::vector<unsigned int> &res) {
-    //     const auto L = index->getParam().get<unsigned>("L_search");
-    //     const auto K = index->getParam().get<unsigned>("K_search");
-
-    //     std::vector<char> flags(index->getBaseLen(), 0);
-
-    //     int k = 0;
-    //     while (k < (int)L) {
-    //         int nk = L;
-
-    //         if (pool[k].flag) {
-    //             pool[k].flag = false;
-    //             unsigned n = pool[k].id;
-
-    //             unsigned div_dim_ = index->Tn[n].div_dim;
-    //             unsigned left_len = index->Tn[n].left.size();
-    //             // std::cout << "left_len: " << left_len << std::endl;
-    //             unsigned right_len = index->Tn[n].right.size();
-    //             // std::cout << "right_len: " << right_len << std::endl;
-    //             std::vector<unsigned> nn;
-    //             unsigned MaxM;
-    //             if ((index->getQueryEmbData() + index->getQueryDim() * query)[div_dim_] < (index->getBaseEmbData() + index->getBaseDim() * n)[div_dim_]) {
-    //                 MaxM = left_len;
-    //                 nn = index->Tn[n].left;
-    //             }
-    //             else {
-    //                 MaxM = right_len;
-    //                 nn = index->Tn[n].right;
-    //             }
-
-    //             index->addHopCount();
-    //             for (unsigned m = 0; m < MaxM; ++m) {
-    //                 unsigned id = nn[m];
-    //                 if (flags[id]) continue;
-    //                 flags[id] = 1;
-    //                 float dist = index->getDist()->compare(index->getQueryEmbData() + query * index->getQueryDim(),
-    //                                                        index->getBaseEmbData() + id * index->getBaseDim(),
-    //                                                        (unsigned)index->getBaseDim());
-    //                 index->addDistCount();
-    //                 if (dist >= pool[L - 1].distance) continue;
-    //                 Index::Neighbor nn(id, dist, true);
-    //                 int r = Index::InsertIntoPool(pool.data(), L, nn);
-
-    //                 // if(L+1 < retset.size()) ++L;
-    //                 if (r < nk) nk = r;
-    //             }
-    //         }
-    //         if (nk <= k)
-    //             k = nk;
-    //         else
-    //             ++k;
-    //     }
-
-    //     res.resize(K);
-    //     for (size_t i = 0; i < K; i++) {
-    //         res[i] = pool[i].id;
-    //     }
-    // }
-
 }

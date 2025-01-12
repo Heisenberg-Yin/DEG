@@ -22,26 +22,6 @@ void NSW_PARA(std::string dataset, stkq::Parameters &parameters)
     parameters.set<unsigned>("ef_construction", ef_construction);
 }
 
-void NSWV2_PARA(std::string dataset, stkq::Parameters &parameters)
-{
-    unsigned max_m0, ef_construction;
-    if (dataset == "Twitter10K")
-    {
-        max_m0 = 20, ef_construction = 200; // sift1M
-    }
-    else if (dataset == "coco")
-    {
-        max_m0 = 20, ef_construction = 200;
-    }
-    else
-    {
-        std::cout << "dataset error!\n";
-        exit(-1);
-    }
-    parameters.set<unsigned>("NN", max_m0);
-    parameters.set<unsigned>("ef_construction", ef_construction);
-}
-
 void HNSW_PARA(std::string dataset, stkq::Parameters &parameters)
 {
     unsigned max_m, max_m0, ef_construction;
@@ -83,7 +63,7 @@ void HNSW_PARA(std::string dataset, stkq::Parameters &parameters)
     parameters.set<int>("mult", -1);
 }
 
-void GEOGRAPH_PARA(std::string dataset, stkq::Parameters &parameters)
+void DEG_PARA(std::string dataset, stkq::Parameters &parameters)
 {
     unsigned max_m, init_edge, ef_construction, candidate_edge, ITER, rnn_size, update_layer, L_refine, R_refine, C_refine;
     if (dataset == "Twitter10K")
@@ -279,18 +259,10 @@ void set_para(std::string alg, std::string dataset, stkq::Parameters &parameters
     {
         NSG_PARA(dataset, parameters);
     }
-    else if (alg == "geograph")
+    else if (alg == "DEG")
     {
-        GEOGRAPH_PARA(dataset, parameters);
-    }
-    else if (alg == "geograph2")
-    {
-        GEOGRAPH_PARA(dataset, parameters);
-    }
-    else if (alg == "geograph3")
-    {
-        GEOGRAPH_PARA(dataset, parameters);
-    }    
+        DEG_PARA(dataset, parameters);
+    }  
     else if (alg == "baseline1")
     {
         HNSW_PARA(dataset, parameters);
