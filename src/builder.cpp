@@ -17,12 +17,12 @@ namespace stkq
      * return pointer of builder
      */
 
-    IndexBuilder *IndexBuilder::load(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *ground_file, Parameters &parameters, bool dual)
+    IndexBuilder *IndexBuilder::load(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *query_alpha_file, char *ground_file, Parameters &parameters, bool dual)
     {
         if (!dual)
         {
             auto *a = new ComponentLoad(final_index_);
-            a->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, ground_file, parameters);
+            a->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, query_alpha_file, ground_file, parameters);
             std::cout << "base data len : " << final_index_->getBaseLen() << std::endl;
             std::cout << "base data emb dim : " << final_index_->getBaseEmbDim() << std::endl;
             std::cout << "base data loc dim : " << final_index_->getBaseLocDim() << std::endl;
@@ -39,10 +39,10 @@ namespace stkq
         else
         {
             auto *a = new ComponentLoad(final_index_1);
-            a->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, ground_file, parameters);
+            a->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, query_alpha_file, ground_file, parameters);
             final_index_1->set_alpha(0);
             auto *b = new ComponentLoad(final_index_2);
-            b->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, ground_file, parameters);
+            b->LoadInner(data_emb_file, data_loc_file, query_emb_file, query_loc_file, query_alpha_file, ground_file, parameters);
             final_index_2->set_alpha(1);
             std::cout << "base data len : " << final_index_1->getBaseLen() << std::endl;
             std::cout << "base data emb dim : " << final_index_1->getBaseEmbDim() << std::endl;
@@ -62,13 +62,6 @@ namespace stkq
         }
     }
 
-    /**
-     * build init graph
-     * param type init type
-     * param debug Whether to output graph index information (will have a certain impact on performance)
-     * return pointer of builder
-     */
-
     IndexBuilder *IndexBuilder::init(TYPE type, bool debug)
     {
         s = std::chrono::high_resolution_clock::now();
@@ -81,8 +74,13 @@ namespace stkq
         }
         else if (type == INIT_DEG)
         {
-            std::cout << "__INIT : GEO_RNG__" << std::endl;
+            std::cout << "__INIT : DEG__" << std::endl;
             a = new ComponentInitDEG(final_index_);
+        }
+        else if (type == INIT_RANDOM)
+        {
+            std::cout << "__INIT : RANDOM__" << std::endl;
+            a = new ComponentInitRandom(final_index_);
         }
         else if (type == INIT_RTREE)
         {
@@ -107,49 +105,58 @@ namespace stkq
         return this;
     }
 
-    /**
-     * build refine graph
-     * @param type refine type
-     * @param debug
-     * @return
-     */
-    IndexBuilder *IndexBuilder::refine(TYPE type, bool debug)
-    {
-        ComponentRefine *a = nullptr;
-
-        if (type == REFINE_NN_DESCENT)
-        {
-            std::cout << "__REFINE : NNDscent" << std::endl;
-            a = new ComponentRefineNNDescent(final_index_);
-        }
-        else if (type == REFINE_NSG)
-        {
-            std::cout << "__REFINE : NSG__" << std::endl;
-            a = new ComponentRefineNSG(final_index_);
-        }
-        else
-        {
-            std::cerr << "__REFINE : WRONG TYPE__" << std::endl;
-        }
-
-        a->RefineInner();
-
-        std::cout << "===================" << std::endl;
-        std::cout << "__REFINE : FINISH__" << std::endl;
-        std::cout << "===================" << std::endl;
-        e = std::chrono::high_resolution_clock::now();
-        return this;
-    }
 
     IndexBuilder *IndexBuilder::save_graph(TYPE type, char *graph_file)
     {
 
-        std::fstream out(graph_file, std::ios::binary | std::ios::out);
-        if (type == INDEX_NSG)
+        if (type == INDEX_BS4)
         {
-            out.write((char *)&final_index_->ep_, sizeof(unsigned));
+            for (unsigned subindex = 0; subindex < 5; subindex++)
+            {
+                // std::string filename = "subindex_" + std::to_string(subindex) + ".bin";
+                std::string filename = std::string(graph_file) + "subindex_" + std::to_string(subindex);
+                std::ofstream out(filename, std::ios::binary);
+
+                if (!out.is_open())
+                {
+                    std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
+                    continue;
+                }
+
+                unsigned enterpoint_id = final_index_->baseline4_enterpoint_[subindex]->GetId();
+                unsigned max_level = final_index_->baseline4_max_level_[subindex];
+
+                // Save enter point and max level for each sub-index
+                out.write((char *)&enterpoint_id, sizeof(unsigned));
+                out.write((char *)&max_level, sizeof(unsigned));
+
+                // Save all nodes for each sub-index
+                for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
+                {
+                    unsigned node_id = final_index_->baseline4_nodes_[subindex][i]->GetId();
+                    out.write((char *)&node_id, sizeof(unsigned));
+                    unsigned node_level = final_index_->baseline4_nodes_[subindex][i]->GetLevel() + 1;
+                    out.write((char *)&node_level, sizeof(unsigned));
+
+                    unsigned current_level_GK;
+                    for (unsigned j = 0; j < node_level; j++)
+                    {
+                        current_level_GK = final_index_->baseline4_nodes_[subindex][i]->GetFriends(j).size();
+                        out.write((char *)&current_level_GK, sizeof(unsigned));
+                        for (unsigned k = 0; k < current_level_GK; k++)
+                        {
+                            unsigned current_level_neighbor_id = final_index_->baseline4_nodes_[subindex][i]->GetFriends(j)[k]->GetId();
+                            out.write((char *)&current_level_neighbor_id, sizeof(unsigned));
+                        }
+                    }
+                }
+                out.close();
+            }
+            return this;
         }
-        else if (type == INDEX_HNSW)
+
+        std::fstream out(graph_file, std::ios::binary | std::ios::out);
+        if (type == INDEX_HNSW)
         {
             unsigned enterpoint_id = final_index_->enterpoint_->GetId();
             unsigned max_level = final_index_->max_level_;
@@ -172,24 +179,6 @@ namespace stkq
                         out.write((char *)&current_level_neighbor_id, sizeof(unsigned));
                     }
                 }
-            }
-            out.close();
-            return this;
-        }
-        else if (type == INDEX_NSW)
-        {
-            for (unsigned i = 0; i < final_index_->nodes_.size(); i++)
-            {
-                unsigned GK = (unsigned)final_index_->nodes_[i]->GetFriends(0).size();
-                unsigned node_id = final_index_->nodes_[i]->GetId();
-                std::vector<unsigned> tmp;
-                for (unsigned j = 0; j < GK; j++)
-                {
-                    tmp.push_back((unsigned)final_index_->nodes_[i]->GetFriends(0)[j]->GetId());
-                }
-                out.write((char *)&node_id, sizeof(unsigned));
-                out.write((char *)&GK, sizeof(unsigned));
-                out.write((char *)tmp.data(), GK * sizeof(unsigned));
             }
             out.close();
             return this;
@@ -218,8 +207,8 @@ namespace stkq
                     Index::DEGNeighbor &neighbor = final_index_->DEG_nodes_[i]->GetFriends()[k];
                     unsigned neighbor_id = neighbor.id_;
                     out.write((char *)&neighbor_id, sizeof(unsigned));
-                    std::vector<std::pair<float, float>> use_range = neighbor.available_range;
 
+                    std::vector<std::pair<float, float>> use_range = neighbor.available_range;
                     // unsigned range_size = use_range.size();
                     // out.write((char *)&range_size, sizeof(unsigned));
                     // for (unsigned t = 0; t < range_size; t++)
@@ -233,9 +222,9 @@ namespace stkq
                     for (unsigned t = 0; t < range_size; t++)
                     {
                         int8_t x = static_cast<int8_t>(use_range[t].first * 100);
-                        int8_t y = static_cast<int8_t>(use_range[t].second * 100);                        
-                        out.write((char *)x, sizeof(x));
-                        out.write((char *)y, sizeof(y));
+                        int8_t y = static_cast<int8_t>(use_range[t].second * 100);
+                        out.write((char *)&x, sizeof(int8_t));
+                        out.write((char *)&y, sizeof(int8_t));
                     }
                 }
             }
@@ -270,14 +259,85 @@ namespace stkq
         }
         out.close();
 
+        // std::vector<std::vector<Index::SimpleNeighbor>>().swap(final_index_->getFinalGraph());
         return this;
     }
 
     IndexBuilder *IndexBuilder::load_graph(TYPE type, char *graph_file)
     {
-        std::ifstream in(graph_file, std::ios::binary);
         int average_neighbor_size = 0;
         int l1_average_neighbor_size = 0;
+        if (type == INDEX_BS4)
+        {
+            final_index_->baseline4_nodes_.resize(5);
+            final_index_->baseline4_enterpoint_.resize(5);
+            final_index_->baseline4_max_level_.resize(5);
+
+            double average_neighbor_size = 0; // Initialize average neighbor size
+
+            for (unsigned subindex = 0; subindex < 5; subindex++)
+            {
+                // Open the file corresponding to the current subindex
+                // std::string filename = "subindex_" + std::to_string(subindex) + graph_file;
+                std::string filename = std::string(graph_file) + "subindex_" + std::to_string(subindex);
+                std::ifstream in(filename, std::ios::binary);
+
+                if (!in.is_open())
+                {
+                    std::cerr << "Error: Could not open file " << filename << " for reading." << std::endl;
+                    continue;
+                }
+
+                // Resize and initialize nodes for each sub-index
+                final_index_->baseline4_nodes_[subindex].resize(final_index_->getBaseLen());
+                for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
+                {
+                    final_index_->baseline4_nodes_[subindex][i] = new stkq::baseline4::BS4Node(0, 0, 0, 0);
+                }
+
+                // Read enterpoint ID and max level for this sub-index
+                unsigned enterpoint_id;
+                in.read((char *)&enterpoint_id, sizeof(unsigned));
+                in.read((char *)&final_index_->baseline4_max_level_[subindex], sizeof(unsigned));
+
+                // Load all nodes and their connections for this sub-index
+                for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
+                {
+                    unsigned node_id, node_level, current_level_GK;
+                    in.read((char *)&node_id, sizeof(unsigned));
+                    final_index_->baseline4_nodes_[subindex][node_id]->SetId(node_id);
+                    in.read((char *)&node_level, sizeof(unsigned));
+                    final_index_->baseline4_nodes_[subindex][node_id]->SetLevel(node_level - 1); // Subtract 1 to match original level
+
+                    // Read neighbors at each level
+                    for (unsigned j = 0; j < node_level; j++)
+                    {
+                        in.read((char *)&current_level_GK, sizeof(unsigned));
+                        std::vector<stkq::baseline4::BS4Node *> tmp;
+                        if (j == 0)
+                        {
+                            average_neighbor_size += current_level_GK;
+                        }
+                        for (unsigned k = 0; k < current_level_GK; k++)
+                        {
+                            unsigned current_level_neighbor_id;
+                            in.read((char *)&current_level_neighbor_id, sizeof(unsigned));
+                            tmp.push_back(final_index_->baseline4_nodes_[subindex][current_level_neighbor_id]);
+                        }
+                        final_index_->baseline4_nodes_[subindex][node_id]->SetFriends(j, tmp);
+                    }
+                }
+                // Set enterpoint for this sub-index
+                final_index_->baseline4_enterpoint_[subindex] = final_index_->baseline4_nodes_[subindex][enterpoint_id];
+
+                in.close(); // Close the file after reading
+            }
+            std::cout << "average_neighbor_size: " << average_neighbor_size / final_index_->getBaseLen() << std::endl;
+
+            return this;
+        }
+
+        std::ifstream in(graph_file, std::ios::binary);
 
         if (!in.is_open())
         {
@@ -302,6 +362,7 @@ namespace stkq
                 final_index_->nodes_[node_id]->SetId(node_id);
                 in.read((char *)&node_level, sizeof(unsigned));
                 final_index_->nodes_[node_id]->SetLevel(node_level);
+
                 for (unsigned j = 0; j < node_level; j++)
                 {
                     in.read((char *)&current_level_GK, sizeof(unsigned));
@@ -314,69 +375,15 @@ namespace stkq
                     {
                         unsigned current_level_neighbor_id;
                         in.read((char *)&current_level_neighbor_id, sizeof(unsigned));
+                        // final_index_->nodes_[current_level_neighbor_id]->SetId(current_level_neighbor_id);
                         tmp.push_back(final_index_->nodes_[current_level_neighbor_id]);
                     }
                     final_index_->nodes_[node_id]->SetFriends(j, tmp);
                 }
             }
             std::cout << "average_neighbor_size: " << average_neighbor_size / final_index_->getBaseLen() << std::endl;
-
             final_index_->enterpoint_ = final_index_->nodes_[enterpoint_id];
             return this;
-        }
-        else if (type == INDEX_NSW)
-        {
-            final_index_->nodes_.resize(final_index_->getBaseLen());
-            for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
-            {
-                final_index_->nodes_[i] = new stkq::HNSW::HnswNode(0, 0, 0, 0);
-            }
-            while (!in.eof())
-            {
-                unsigned GK, node_id;
-                in.read((char *)&node_id, sizeof(unsigned));
-                in.read((char *)&GK, sizeof(unsigned));
-                final_index_->nodes_[node_id]->SetId(node_id);
-                if (in.eof())
-                    break;
-                std::vector<unsigned> tmp(GK);
-                in.read((char *)tmp.data(), GK * sizeof(unsigned));
-                for (unsigned j = 0; j < tmp.size(); j++)
-                {
-                    final_index_->nodes_[tmp[j]]->SetId(tmp[j]);
-                    final_index_->nodes_[node_id]->AddFriends(final_index_->nodes_[tmp[j]], false);
-                }
-            }
-            return this;
-        }
-        else if (type == INDEX_NSWV2)
-        {
-            final_index_->nodes_.resize(final_index_->getBaseLen());
-            for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
-            {
-                final_index_->nodes_[i] = new stkq::HNSW::HnswNode(0, 0, 0, 0);
-            }
-            while (!in.eof())
-            {
-                unsigned GK, node_id;
-                in.read((char *)&node_id, sizeof(unsigned));
-                in.read((char *)&GK, sizeof(unsigned));
-                final_index_->nodes_[node_id]->SetId(node_id);
-                if (in.eof())
-                    break;
-                std::vector<unsigned> tmp(GK);
-                in.read((char *)tmp.data(), GK * sizeof(unsigned));
-                for (unsigned j = 0; j < tmp.size(); j++)
-                {
-                    final_index_->nodes_[tmp[j]]->SetId(tmp[j]);
-                    final_index_->nodes_[node_id]->AddFriends(final_index_->nodes_[tmp[j]], false);
-                }
-            }
-            return this;
-        }
-        else if (type == INDEX_NSG)
-        {
-            in.read((char *)&final_index_->ep_, sizeof(unsigned));
         }
         else if (type == INDEX_DEG)
         {
@@ -384,7 +391,7 @@ namespace stkq
             final_index_->DEG_nodes_.resize(final_index_->getBaseLen());
             for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
             {
-                final_index_->DEG_nodes_[i] = new stkq::DEG::DEGNode(0, 0, 0);
+                final_index_->DEG_nodes_[i] = new stkq::DEG::DEGNode(0, 0);
             }
             unsigned enterpoint_id, enterpoint_size;
             final_index_->enterpoint_set.clear();
@@ -394,6 +401,7 @@ namespace stkq
                 in.read((char *)&enterpoint_id, sizeof(unsigned));
                 final_index_->enterpoint_set.push_back(enterpoint_id);
             }
+
             for (unsigned i = 0; i < final_index_->getBaseLen(); i++)
             {
                 unsigned node_id, neighbor_size;
@@ -401,10 +409,6 @@ namespace stkq
                 final_index_->DEG_nodes_[i]->SetId(node_id);
                 in.read((char *)&neighbor_size, sizeof(unsigned));
                 average_neighbor_size = average_neighbor_size + neighbor_size;
-                // if (j == 0)
-                // {
-                //     average_neighbor_size = average_neighbor_size + neighbor_size;
-                // }
                 final_index_->DEG_nodes_[i]->SetMaxM(neighbor_size);
                 std::vector<Index::DEGSimpleNeighbor> neighbors;
                 neighbors.reserve(neighbor_size);
@@ -415,16 +419,15 @@ namespace stkq
                     in.read((char *)&neighbor_id, sizeof(unsigned));
                     unsigned range_size;
                     in.read((char *)&range_size, sizeof(unsigned));
-                                        
-                    std::vector<std::pair<float, float>> use_range;
+                    std::vector<std::pair<int8_t, int8_t>> use_range;
+                    use_range.reserve(range_size+1);                    
                     for (unsigned t = 0; t < range_size; t++)
                     {
-                        float range_start, range_end;
-                        in.read((char *)&range_start, sizeof(float));
-                        in.read((char *)&range_end, sizeof(float));
+                        int8_t range_start, range_end;
+                        in.read((char *)&range_start, sizeof(int8_t));
+                        in.read((char *)&range_end, sizeof(int8_t));                        
                         use_range.push_back(std::make_pair(range_start, range_end));
                     }
-                    // neighbors.push_back(std::make_shared<Index::DEGEdge>(final_index_->DEG_nodes_[neighbor_id], e_dist, s_dist, use_range));
                     neighbors.push_back(Index::DEGSimpleNeighbor(neighbor_id, use_range));
                 }
                 final_index_->DEG_nodes_[i]->SetSearchFriends(neighbors);
@@ -591,7 +594,6 @@ namespace stkq
 
         return this;
     }
-
     /**
      * offline search
      * param entry_type
@@ -802,6 +804,12 @@ namespace stkq
 
                     auto s2 = std::chrono::high_resolution_clock::now();
 
+                    std::chrono::duration<double> total_duration = s2 - s1;
+
+                    double throughput = final_index_1->getQueryLen() / total_duration.count();
+
+                    // std::cout << "Throughput of R-Tree: " << throughput << " queries/second\n";
+
                     res_2.clear();
                     res_2.resize(final_index_2->getQueryLen());
                     for (unsigned i = 0; i < final_index_2->getQueryLen(); i++)
@@ -810,11 +818,18 @@ namespace stkq
                         a2->SearchEntryInner(i, pool);
                         b2->RouteInner(i, pool, res_2[i]);
                     }
+                    auto s3 = std::chrono::high_resolution_clock::now();
+                    total_duration = s3 - s2;
+
+                    throughput = final_index_1->getQueryLen() / total_duration.count();
+
+                    // std::cout << "Throughput of HNSW: " << throughput << " queries/second\n";
+
                     std::cout << "DistCount: " << final_index_2->getDistCount() << std::endl;
                     std::cout << "HopCount: " << final_index_2->getHopCount() << std::endl;
+
                     final_index_2->resetDistCount();
                     final_index_2->resetHopCount();
-                    // int cnt = 0;
                     std::priority_queue<Index::CloserFirst> result_queue;
                     std::vector<std::vector<unsigned>> res;
 
@@ -934,27 +949,27 @@ namespace stkq
             std::cout << "__ROUTER : GREEDY__" << std::endl;
             b = new ComponentSearchRouteGreedy(final_index_);
         }
-        else if (route_type == ROUTER_NSW)
-        {
-            std::cout << "__ROUTER : NSW__" << std::endl;
-            b = new ComponentSearchRouteNSW(final_index_);
-        }
         else if (route_type == ROUTER_HNSW)
         {
             std::cout << "__ROUTER : HNSW__" << std::endl;
             b = new ComponentSearchRouteHNSW(final_index_);
         }
+        else if (route_type == ROUTER_BS4)
+        {
+            std::cout << "__ROUTER : BASELINE4__" << std::endl;
+            b = new ComponentSearchRouteBS4(final_index_);
+        }
         else if (route_type == ROUTER_DEG)
         {
             std::cout << "__ROUTER : DEG__" << std::endl;
             b = new ComponentSearchRouteDEG(final_index_);
-            // b->UpdateEnterpointSet();
         }
         else
         {
             std::cerr << "__ROUTER : WRONG TYPE__" << std::endl;
             exit(-1);
         }
+        // std::cout << final_index_->alpha << std::endl;
 
         if (L_type == L_SEARCH_ASCEND)
         {
@@ -966,6 +981,8 @@ namespace stkq
             unsigned L = 0;
             visited.insert(L);
             unsigned L_min = 0x7fffffff;
+            // while (true)
+            // {
             for (unsigned t = 0; t < 20; t++)
             {
 
@@ -985,16 +1002,16 @@ namespace stkq
                 res.resize(final_index_->getQueryLen());
                 //  #pragma omp parallel for
                 for (unsigned i = 0; i < final_index_->getQueryLen(); i++)
+                //                for (unsigned i = 0; i < 1000; i++)
                 {
+                    final_index_->set_alpha(final_index_->getQueryWeightData()[i]);
                     std::vector<Index::Neighbor> pool;
                     a->SearchEntryInner(i, pool);
                     b->RouteInner(i, pool, res[i]);
                 }
-
                 auto e1 = std::chrono::high_resolution_clock::now();
                 std::chrono::duration<double> diff = e1 - s1;
                 std::cout << "search time: " << diff.count() / final_index_->getQueryLen() << "\n";
-
                 std::cout << "DistCount: " << final_index_->getDistCount() << std::endl;
                 std::cout << "HopCount: " << final_index_->getHopCount() << std::endl;
                 final_index_->resetDistCount();
@@ -1021,10 +1038,181 @@ namespace stkq
                     tmp_recall = (float)(K - cnt) / (float)K;
                     recall = recall + tmp_recall;
                 }
+                // float acc = 1 - (float)cnt / (final_index_->getGroundLen() * K);
                 float acc = recall / final_index_->getQueryLen();
                 std::cout << K << " NN accuracy: " << acc << std::endl;
+                // exit(1);
             }
         }
+        //     if (acc_set - acc <= 0)
+        //     {
+        //         if (L_min > L)
+        //             L_min = L;
+        //         if (L == K || L_sl == 1)
+        //         {
+        //             break;
+        //         }
+        //         else
+        //         {
+        //             if (flag == false)
+        //             {
+        //                 L_sl < 0 ? L_sl-- : L_sl++;
+        //                 flag = true;
+        //             }
+
+        //             L_sl /= 2;
+
+        //             if (L_sl == 0)
+        //             {
+        //                 break;
+        //             }
+        //             L_sl < 0 ? L_sl : L_sl = -L_sl;
+        //         }
+        //     }
+        //     else
+        //     {
+        //         if (L_min < L)
+        //             break;
+        //         L_sl = (int)(sg * (acc_set - acc));
+        //         if (L_sl == 0)
+        //             L_sl++;
+        //         flag = false;
+        //     }
+        //     L += L_sl;
+        //     if (visited.count(L))
+        //     {
+        //         break;
+        //     }
+        //     else
+        //     {
+        //         visited.insert(L);
+        //     }
+        // }
+        // std::cout << "L_min: " << L_min << std::endl;
+        // }
+        // else if (L_type == L_SEARCH_ASCEND)
+        // {
+        //     unsigned L_st = 5;
+        //     unsigned L_st2 = 8;
+        //     for (unsigned i = 0; i < 10; i++)
+        //     {
+        //         unsigned L = L_st + L_st2;
+        //         L_st = L_st2;
+        //         L_st2 = L;
+        //         std::cout << "SEARCH_L : " << L << std::endl;
+        //         if (L < K)
+        //         {
+        //             std::cout << "search_L cannot be smaller than search_K! " << std::endl;
+        //             exit(-1);
+        //         }
+
+        //         final_index_->getParam().set<unsigned>("L_search", L);
+
+        //         auto s1 = std::chrono::high_resolution_clock::now();
+
+        //         res.clear();
+        //         res.resize(final_index_->getBaseLen());
+
+        //         for (unsigned i = 0; i < final_index_->getQueryLen(); i++)
+        //         {
+        //             std::vector<Index::Neighbor> pool;
+        //             a->SearchEntryInner(i, pool);
+        //             b->RouteInner(i, pool, res[i]);
+        //         }
+
+        //         auto e1 = std::chrono::high_resolution_clock::now();
+        //         std::chrono::duration<double> diff = e1 - s1;
+        //         std::cout << "search time: " << diff.count() << "\n";
+        //         // float speedup = (float)(index_->n_ * query_num) / (float)distcount;
+        //         std::cout << "DistCount: " << final_index_->getDistCount() << std::endl;
+        //         std::cout << "HopCount: " << final_index_->getHopCount() << std::endl;
+        //         final_index_->resetDistCount();
+        //         final_index_->resetHopCount();
+        //         // int cnt = 0;
+        //         float recall = 0;
+        //         for (unsigned i = 0; i < final_index_->getQueryLen(); i++)
+        //         {
+        //             if (res[i].size() == 0)
+        //                 continue;
+        //             float tmp_recall = 0;
+        //             float cnt = 0;
+        //             for (unsigned j = 0; j < K; j++)
+        //             {
+        //                 unsigned k = 0;
+        //                 for (; k < K; k++)
+        //                 {
+        //                     if (res[i][j] == final_index_->getGroundData()[i * final_index_->getGroundDim() + k])
+        //                         break;
+        //                 }
+        //                 if (k == K)
+        //                     cnt++;
+        //             }
+        //             tmp_recall = (float)(K - cnt) / (float)K;
+        //             recall = recall + tmp_recall;
+        //         }
+        //         // float acc = 1 - (float)cnt / (final_index_->getGroundLen() * K);
+        //         float acc = recall / final_index_->getQueryLen();
+        //         std::cout << K << " NN accuracy: " << acc << std::endl;
+        //     }
+        // }
+        // else if (L_type == L_SEARCH_ASSIGN)
+        // {
+
+        //     unsigned L = final_index_->getParam().get<unsigned>("L_search");
+        //     std::cout << "SEARCH_L : " << L << std::endl;
+        //     if (L < K)
+        //     {
+        //         std::cout << "search_L cannot be smaller than search_K! " << std::endl;
+        //         exit(-1);
+        //     }
+
+        //     auto s1 = std::chrono::high_resolution_clock::now();
+
+        //     res.clear();
+        //     res.resize(final_index_->getBaseLen());
+
+        //     for (unsigned i = 0; i < final_index_->getQueryLen(); i++)
+        //     {
+        //         // pool.clear();
+        //         // if (i == 5070) continue; // only for hnsw search on glove-100
+        //         std::vector<Index::Neighbor> pool;
+
+        //         a->SearchEntryInner(i, pool);
+
+        //         b->RouteInner(i, pool, res[i]);
+        //     }
+
+        //     auto e1 = std::chrono::high_resolution_clock::now();
+        //     std::chrono::duration<double> diff = e1 - s1;
+        //     std::cout << "search time: " << diff.count() << "\n";
+
+        //     // float speedup = (float)(index_->n_ * query_num) / (float)distcount;
+        //     std::cout << "DistCount: " << final_index_->getDistCount() << std::endl;
+        //     std::cout << "HopCount: " << final_index_->getHopCount() << std::endl;
+        //     final_index_->resetDistCount();
+        //     final_index_->resetHopCount();
+        //     int cnt = 0;
+        //     for (unsigned i = 0; i < final_index_->getGroundLen(); i++)
+        //     {
+        //         if (res[i].size() == 0)
+        //             continue;
+        //         for (unsigned j = 0; j < K; j++)
+        //         {
+        //             unsigned k = 0;
+        //             for (; k < K; k++)
+        //             {
+        //                 if (res[i][j] == final_index_->getGroundData()[i * final_index_->getGroundDim() + k])
+        //                     break;
+        //             }
+        //             if (k == K)
+        //                 cnt++;
+        //         }
+        //     }
+
+        //     float acc = 1 - (float)cnt / (final_index_->getGroundLen() * K);
+        //     std::cout << K << " NN accuracy: " << acc << std::endl;
+        // }
+
         e = std::chrono::high_resolution_clock::now();
         std::cout << "__SEARCH FINISH__" << std::endl;
 
@@ -1033,7 +1221,6 @@ namespace stkq
 
     void IndexBuilder::peak_memory_footprint()
     {
-
         unsigned iPid = (unsigned)getpid();
 
         std::cout << "PID: " << iPid << std::endl;
@@ -1052,4 +1239,5 @@ namespace stkq
         }
         info.close();
     }
+
 }

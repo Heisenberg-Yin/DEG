@@ -32,7 +32,7 @@ namespace stkq
             delete final_index_2;
         }
 
-        IndexBuilder *load(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *ground_file, Parameters &parameters, bool dual=false);
+        IndexBuilder *load(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *ground_file, char *query_alpha, Parameters &parameters, bool dual=false);
 
         IndexBuilder *init(TYPE type, bool debug = false);
 

@@ -118,7 +118,7 @@ namespace stkq
         std::cout << "Loaded " << num << " entries from " << filename << " with dimension " << dim << std::endl;
     }
 
-    void ComponentLoad::LoadInner(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *ground_file,
+    void ComponentLoad::LoadInner(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *query_alpha_file, char *ground_file,
                                   Parameters &parameters)
     {
         // base_emb_data
@@ -154,6 +154,12 @@ namespace stkq
         index->setQueryLocData(query_loc);
         index->setQueryLocDim(query_loc_dim);
         assert(query_loc_num == index->getQueryLen() && query_loc_dim == index->getBaseLocDim());
+        float *query_alpha = nullptr;
+        unsigned query_alpha_num{};
+        unsigned query_alpha_dim{};
+        load_data(query_alpha_file, query_alpha, query_alpha_num, query_alpha_dim);
+        index->setQueryWeightData(query_alpha);
+        assert(query_loc_num == index->getQueryLen());
         unsigned *ground_data = nullptr;
         unsigned ground_num{};
         unsigned ground_dim{};

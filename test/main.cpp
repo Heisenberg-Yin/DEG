@@ -2,39 +2,6 @@
 #include <set_para.h>
 #include <iostream>
 
-void NSW(stkq::Parameters &parameters)
-{
-    const unsigned num_threads = parameters.get<unsigned>("n_threads");
-    std::string base_emb_path = parameters.get<std::string>("base_emb_path");
-    std::string base_loc_path = parameters.get<std::string>("base_loc_path");
-    std::string query_emb_path = parameters.get<std::string>("query_emb_path");
-    std::string query_loc_path = parameters.get<std::string>("query_loc_path");
-    std::string ground_path = parameters.get<std::string>("ground_path");
-    std::string graph_file = parameters.get<std::string>("graph_file");
-    // auto *builder = new stkq::IndexBuilder(num_threads);
-    auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
-
-    if (parameters.get<std::string>("exc_type") == "build")
-    {
-        // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->init(stkq::INIT_NSW)
-            ->save_graph(stkq::TYPE::INDEX_NSW, &graph_file[0]);
-        std::cout << "Build cost: " << builder->GetBuildTime().count() << std::endl;
-    }
-    else if (parameters.get<std::string>("exc_type") == "search")
-    {
-        // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
-            ->load_graph(stkq::TYPE::INDEX_NSW, &graph_file[0])
-            ->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_NSW, stkq::TYPE::L_SEARCH_ASCEND, parameters);
-        builder->peak_memory_footprint();
-    }
-    else
-    {
-        std::cout << "exc_type input error!" << std::endl;
-    }
-}
 
 void HNSW(stkq::Parameters &parameters)
 {
@@ -43,6 +10,7 @@ void HNSW(stkq::Parameters &parameters)
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
     auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
@@ -50,7 +18,7 @@ void HNSW(stkq::Parameters &parameters)
     if (parameters.get<std::string>("exc_type") == "build")
     {
         // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_HNSW)
             ->save_graph(stkq::TYPE::INDEX_HNSW, &graph_file[0]);
         std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
@@ -58,7 +26,7 @@ void HNSW(stkq::Parameters &parameters)
     else if (parameters.get<std::string>("exc_type") == "search")
     {
         // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->load_graph(stkq::TYPE::INDEX_HNSW, &graph_file[0])
             ->search(stkq::TYPE::SEARCH_ENTRY_NONE, stkq::TYPE::ROUTER_HNSW, stkq::TYPE::L_SEARCH_ASCEND, parameters);
         builder->peak_memory_footprint();
@@ -76,6 +44,7 @@ void baseline1(stkq::Parameters &parameters)
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
     auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
@@ -84,7 +53,7 @@ void baseline1(stkq::Parameters &parameters)
     {
         // build
         parameters.set<float>("alpha", 0.5);
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_HNSW)
             ->save_graph(stkq::TYPE::INDEX_HNSW, &graph_file[0]);
         std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
@@ -92,7 +61,7 @@ void baseline1(stkq::Parameters &parameters)
     else if (parameters.get<std::string>("exc_type") == "search")
     {
         // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters);
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters);
         builder->peak_memory_footprint();
         builder->load_graph(stkq::TYPE::INDEX_HNSW, &graph_file[0]);
         builder->peak_memory_footprint();
@@ -113,6 +82,7 @@ void baseline2(stkq::Parameters &parameters)
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
     auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"), true);
@@ -123,7 +93,7 @@ void baseline2(stkq::Parameters &parameters)
         auto *builder_1 = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
         std::string graph_file_1 = graph_file + "_1";
         parameters.set<float>("alpha", 0);
-        builder_1->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder_1->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_HNSW)
             ->save_graph(stkq::TYPE::INDEX_HNSW, &graph_file_1[0]);
 
@@ -131,7 +101,7 @@ void baseline2(stkq::Parameters &parameters)
 
         std::string graph_file_2 = graph_file + "_2";
         parameters.set<float>("alpha", 1);
-        builder_2->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder_2->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_HNSW)
             ->save_graph(stkq::TYPE::INDEX_HNSW, &graph_file_2[0]);
         builder->set_end_time();
@@ -142,7 +112,7 @@ void baseline2(stkq::Parameters &parameters)
         // search
         std::string graph_file_1 = graph_file + "_1";
         std::string graph_file_2 = graph_file + "_2";
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters, true);
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters, true);
         builder->peak_memory_footprint();
 
         builder->load_graph(stkq::TYPE::INDEX_HNSW, &graph_file_1[0], &graph_file_2[0]);
@@ -164,6 +134,7 @@ void baseline3(stkq::Parameters &parameters)
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
     auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"), true);
@@ -175,7 +146,7 @@ void baseline3(stkq::Parameters &parameters)
         auto *builder_1 = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
         std::string graph_file_1 = graph_file + "_1";
         parameters.set<float>("alpha", 0);
-        builder_1->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder_1->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_RTREE)
             ->save_graph(stkq::TYPE::INDEX_RTREE, &graph_file_1[0]);
 
@@ -183,7 +154,7 @@ void baseline3(stkq::Parameters &parameters)
 
         std::string graph_file_2 = graph_file + "_2";
         parameters.set<float>("alpha", 1);
-        builder_2->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder_2->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_HNSW)
             ->save_graph(stkq::TYPE::INDEX_HNSW, &graph_file_2[0]);
         builder->set_end_time();           
@@ -195,7 +166,7 @@ void baseline3(stkq::Parameters &parameters)
         // search
         std::string graph_file_1 = graph_file + "_1";
         std::string graph_file_2 = graph_file + "_2";
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters, true);
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters, true);
         builder->peak_memory_footprint();
         builder->load_graph(stkq::TYPE::INDEX_RTREE_HNSW, &graph_file_1[0], &graph_file_2[0]);
         builder->peak_memory_footprint();
@@ -250,13 +221,14 @@ void DEG(stkq::Parameters &parameters)
     std::string base_loc_path = parameters.get<std::string>("base_loc_path");
     std::string query_emb_path = parameters.get<std::string>("query_emb_path");
     std::string query_loc_path = parameters.get<std::string>("query_loc_path");
+    std::string query_alpha_path = parameters.get<std::string>("query_alpha_path");
     std::string ground_path = parameters.get<std::string>("ground_path");
     std::string graph_file = parameters.get<std::string>("graph_file");
     auto *builder = new stkq::IndexBuilder(num_threads, parameters.get<float>("max_emb_distance"), parameters.get<float>("max_spatial_distance"));
     if (parameters.get<std::string>("exc_type") == "build")
     {
         // build
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters)
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters)
             ->init(stkq::INIT_DEG)
             ->save_graph(stkq::TYPE::INDEX_DEG, &graph_file[0]);
         std::cout << "Build cost: " << builder->GetBuildTime().count() << "s" << std::endl;
@@ -264,7 +236,7 @@ void DEG(stkq::Parameters &parameters)
     else if (parameters.get<std::string>("exc_type") == "search")
     {
         // search
-        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &ground_path[0], parameters);
+        builder->load(&base_emb_path[0], &base_loc_path[0], &query_emb_path[0], &query_loc_path[0], &query_alpha_path[0], &ground_path[0], parameters);
         builder->peak_memory_footprint();
         builder->load_graph(stkq::TYPE::INDEX_DEG, &graph_file[0]);
         builder->peak_memory_footprint();
@@ -281,7 +253,7 @@ int main(int argc, char **argv)
 {
     // ./test/main baseline1 openimage 0.5 1 1 build
     // ./test/main baseline2 openimage 0.5 1 1 build
-    // ./test/main DEG openimage 0.5 1 1 build
+    // ./test/main deg openimage 0.5 1 1 build
 
     if (argc != 7)
     {
@@ -318,19 +290,7 @@ int main(int argc, char **argv)
     parameters.set<std::string>("exc_type", exc_type);
     set_para(alg, dataset, parameters);
 
-    if (alg == "nsw")
-    {
-        NSW(parameters);
-    }
-    else if (alg == "hnsw")
-    {
-        HNSW(parameters);
-    }
-    else if (alg == "nsg")
-    {
-        NSG(parameters);
-    }
-    else if (alg == "baseline1")
+    if (alg == "baseline1")
     {
         baseline1(parameters);
     }
@@ -346,7 +306,7 @@ int main(int argc, char **argv)
     {
         baseline4(parameters);
     }
-    else if (alg == "DEG")
+    else if (alg == "deg")
     {
         DEG(parameters);
     }

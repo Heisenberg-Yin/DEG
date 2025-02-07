@@ -16,6 +16,7 @@ namespace stkq
         while (k < (int)L)
         {
             int nk = L;
+
             if (pool[k].flag)
             {
                 pool[k].flag = false;
@@ -81,110 +82,11 @@ namespace stkq
         }
     }
 
-    void ComponentSearchRouteNSW::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
-                                             std::vector<unsigned int> &res)
-    {
-        const auto K = index->getParam().get<unsigned>("K_search");
-
-        auto *visited_list = new Index::VisitedList(index->getBaseLen());
-
-        Index::HnswNode *enterpoint = index->nodes_[0];
-        std::priority_queue<Index::FurtherFirst> result;
-        std::priority_queue<Index::CloserFirst> tmp;
-
-        SearchAtLayer(query, enterpoint, 0, visited_list, result);
-
-        while (!result.empty())
-        {
-            tmp.push(Index::CloserFirst(result.top().GetNode(), result.top().GetDistance()));
-            result.pop();
-        }
-
-        res.resize(K);
-        int pos = 0;
-        while (!tmp.empty() && pos < K)
-        {
-            auto *top_node = tmp.top().GetNode();
-            tmp.pop();
-            res[pos] = top_node->GetId();
-            pos++;
-        }
-        delete visited_list;
-    }
-
-    void ComponentSearchRouteNSW::SearchAtLayer(unsigned qnode, Index::HnswNode *enterpoint, int level,
-                                                Index::VisitedList *visited_list,
-                                                std::priority_queue<Index::FurtherFirst> &result)
-    {
-        const auto L = index->getParam().get<unsigned>("L_search");
-        // TODO: check Node 12bytes => 8bytes
-        std::priority_queue<Index::CloserFirst> candidates;
-
-        float e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
-                                                 index->getBaseEmbData() + enterpoint->GetId() * index->getBaseEmbDim(),
-                                                 index->getBaseEmbDim());
-
-        float s_d = index->get_S_Dist()->compare(index->getQueryLocData() + qnode * index->getBaseLocDim(),
-                                                 index->getBaseLocData() + enterpoint->GetId() * index->getBaseLocDim(),
-                                                 index->getBaseLocDim());
-
-        float d = index->get_alpha() * e_d + (1 - index->get_alpha()) * s_d;
-
-        index->addDistCount();
-        result.emplace(enterpoint, d);
-        candidates.emplace(enterpoint, d);
-
-        visited_list->Reset();
-        visited_list->MarkAsVisited(enterpoint->GetId());
-
-        while (!candidates.empty())
-        {
-            const Index::CloserFirst &candidate = candidates.top();
-            float lower_bound = result.top().GetDistance();
-            if (candidate.GetDistance() > lower_bound)
-                break;
-
-            Index::HnswNode *candidate_node = candidate.GetNode();
-            std::unique_lock<std::mutex> lock(candidate_node->GetAccessGuard());
-            const std::vector<Index::HnswNode *> &neighbors = candidate_node->GetFriends(level);
-            candidates.pop();
-            index->addHopCount();
-            for (const auto &neighbor : neighbors)
-            {
-                int id = neighbor->GetId();
-                if (visited_list->NotVisited(id))
-                {
-                    visited_list->MarkAsVisited(id);
-
-                    e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + qnode * index->getBaseEmbDim(),
-                                                       index->getBaseEmbData() + neighbor->GetId() * index->getBaseEmbDim(),
-                                                       index->getBaseEmbDim());
-
-                    s_d = index->get_S_Dist()->compare(index->getQueryLocData() + qnode * index->getBaseLocDim(),
-                                                       index->getBaseLocData() + neighbor->GetId() * index->getBaseLocDim(),
-                                                       index->getBaseLocDim());
-
-                    d = index->get_alpha() * e_d + (1 - index->get_alpha()) * s_d;
-
-                    index->addDistCount();
-                    if (result.size() < L || result.top().GetDistance() > d)
-                    {
-                        result.emplace(neighbor, d);
-                        candidates.emplace(neighbor, d);
-                        if (result.size() > L)
-                            result.pop();
-                    }
-                }
-            }
-        }
-    }
-
     void ComponentSearchRouteHNSW::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
                                               std::vector<unsigned int> &res)
     {
 
-        const auto K = index->getParam().get<unsigned>("K_search"); 
-        // 获取K_search参数来确定搜索结果的数量
+        const auto K = index->getParam().get<unsigned>("K_search"); // 获取K_search参数来确定搜索结果的数量
 
         // const auto L = index->getParam().get<unsigned>("L_search");
 
@@ -283,9 +185,6 @@ namespace stkq
             }
         }
 
-        // std::cout << "ensure_k : " << ensure_k_path_.size() << " " << ensure_k_path_[0].first->GetId() << std::endl;
-
-        // std::vector<std::pair<Index::HnswNode*, float>> tmp;
         std::priority_queue<Index::FurtherFirst> result;
         std::priority_queue<Index::CloserFirst> tmp;
 
@@ -411,7 +310,7 @@ namespace stkq
     }
 
     void ComponentSearchRouteDEG::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
-                                                  std::vector<unsigned int> &res)
+                                             std::vector<unsigned int> &res)
     {
         const auto K = index->getParam().get<unsigned>("K_search");
         auto *visited_list = new Index::VisitedList(index->getBaseLen());
@@ -419,11 +318,16 @@ namespace stkq
         visited_list->Reset();
         unsigned visited_mark = visited_list->GetVisitMark();
         unsigned int *visited = visited_list->GetVisited();
-        
+
         std::priority_queue<Index::DEG_FurtherFirst> result;
         std::priority_queue<Index::DEG_CloserFirst> tmp;
 
+        // while (result.size() < K && !ensure_k_path_.empty())
+        // {
+        // cur_dist = ensure_k_path_.back().second;
         SearchAtLayer(query, index->DEG_enterpoint_, 0, visited_list, result);
+        // ensure_k_path_.pop_back();
+        // }
 
         while (!result.empty())
         {
@@ -443,16 +347,266 @@ namespace stkq
 
         delete visited_list;
     }
+    void ComponentSearchRouteBS4::RouteInner(unsigned int query, std::vector<Index::Neighbor> &pool,
+                                             std::vector<unsigned int> &res)
+    {
+
+        const auto K = index->getParam().get<unsigned>("K_search"); // 获取K_search参数来确定搜索结果的数量
+
+        auto *visited_list = new Index::VisitedList(index->getBaseLen()); // 初始化一个VisitedList对象来跟踪已访问的节点
+
+        float alpha = index->get_alpha();
+
+        int index_count = 0;
+
+        if (alpha >= 0 && alpha < 0.2)
+        {
+            index_count = 0;
+        }
+        else if (alpha >= 0.2 && alpha < 0.4)
+        {
+            index_count = 1;
+        }
+        else if (alpha >= 0.4 && alpha < 0.6)
+        {
+            index_count = 2;
+        }
+        else if (alpha >= 0.6 && alpha < 0.8)
+        {
+            index_count = 3;
+        }
+        else if (alpha >= 0.8 && alpha <= 1)
+        {
+            index_count = 4;
+        }
+
+        Index::BS4Node *enterpoint = index->baseline4_enterpoint_[index_count];
+        std::vector<std::pair<Index::BS4Node *, float>> ensure_k_path_; // 记录在每一层找到的最近节点及其距离
+
+        Index::BS4Node *cur_node = enterpoint;
+        float e_d, s_d;
+        if (alpha != 0)
+        {
+            e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + (size_t)query * index->getBaseEmbDim(),
+                                               index->getBaseEmbData() + (size_t)cur_node->GetId() * index->getBaseEmbDim(),
+                                               index->getBaseEmbDim());
+        }
+        else
+        {
+            e_d = 0;
+        }
+
+        if (alpha != 1)
+        {
+            s_d = index->get_S_Dist()->compare(index->getQueryLocData() + (size_t)query * index->getBaseLocDim(),
+                                               index->getBaseLocData() + (size_t)cur_node->GetId() * index->getBaseLocDim(),
+                                               index->getBaseLocDim());
+        }
+        else
+        {
+            s_d = 0;
+        }
+
+        float d = alpha * e_d + (1 - alpha) * s_d;
+        index->addDistCount();
+        float cur_dist = d;
+
+        ensure_k_path_.clear();
+        ensure_k_path_.emplace_back(cur_node, cur_dist);
+
+        for (auto i = index->baseline4_max_level_[index_count]; i >= 0; --i)
+        {
+            visited_list->Reset();
+            unsigned visited_mark = visited_list->GetVisitMark();
+            unsigned int *visited = visited_list->GetVisited();
+            visited[cur_node->GetId()] = visited_mark;
+
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                std::unique_lock<std::mutex> local_lock(cur_node->GetAccessGuard());
+                const std::vector<Index::BS4Node *> &neighbors = cur_node->GetFriends(i);
+
+                index->addHopCount();
+                for (auto iter = neighbors.begin(); iter != neighbors.end(); ++iter)
+                {
+                    if (visited[(*iter)->GetId()] != visited_mark)
+                    {
+                        visited[(*iter)->GetId()] = visited_mark;
+
+                        if (alpha != 0)
+                        {
+                            e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + (size_t)query * index->getBaseEmbDim(),
+                                                               index->getBaseEmbData() + (size_t)(*iter)->GetId() * index->getBaseEmbDim(),
+                                                               index->getBaseEmbDim());
+                        }
+                        else
+                        {
+                            e_d = 0;
+                        }
+                        if (alpha != 1)
+                        {
+
+                            s_d = index->get_S_Dist()->compare(index->getQueryLocData() + (size_t)query * index->getBaseLocDim(),
+                                                               index->getBaseLocData() + (size_t)(*iter)->GetId() * index->getBaseLocDim(),
+                                                               index->getBaseLocDim());
+                        }
+                        else
+                        {
+                            s_d = 0;
+                        }
+                        d = alpha * e_d + (1 - alpha) * s_d;
+
+                        index->addDistCount();
+                        if (d < cur_dist)
+                        {
+                            cur_dist = d;
+                            cur_node = *iter;
+                            changed = true;
+                            ensure_k_path_.emplace_back(cur_node, cur_dist);
+                        }
+                    }
+                }
+            }
+        }
+
+        // std::cout << "ensure_k : " << ensure_k_path_.size() << " " << ensure_k_path_[0].first->GetId() << std::endl;
+
+        // std::vector<std::pair<Index::HnswNode*, float>> tmp;
+        std::priority_queue<Index::BS4FurtherFirst> result;
+        std::priority_queue<Index::BS4CloserFirst> tmp;
+
+        while (result.size() < K && !ensure_k_path_.empty())
+        {
+            cur_dist = ensure_k_path_.back().second;
+            SearchAtLayer(query, ensure_k_path_.back().first, 0, visited_list, result);
+            ensure_k_path_.pop_back();
+        }
+
+        while (!result.empty())
+        {
+            tmp.push(Index::BS4CloserFirst(result.top().GetNode(), result.top().GetDistance()));
+            result.pop();
+        }
+
+        res.resize(K);
+        int pos = 0;
+        while (!tmp.empty() && pos < K)
+        {
+            auto *top_node = tmp.top().GetNode();
+            tmp.pop();
+            res[pos] = top_node->GetId();
+            pos++;
+        }
+
+        delete visited_list;
+    }
+
+    void ComponentSearchRouteBS4::SearchAtLayer(unsigned qnode, Index::BS4Node *enterpoint, int level,
+                                                Index::VisitedList *visited_list,
+                                                std::priority_queue<Index::BS4FurtherFirst> &result)
+    {
+        const auto L = index->getParam().get<unsigned>("L_search");
+        // TODO: check Node 12bytes => 8bytes
+        std::priority_queue<Index::BS4CloserFirst> candidates;
+
+        float alpha = index->get_alpha();
+        // exit(1);
+        float e_d, s_d;
+        if (alpha != 0)
+        {
+            e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + (size_t)qnode * index->getBaseEmbDim(),
+                                               index->getBaseEmbData() + (size_t)enterpoint->GetId() * index->getBaseEmbDim(),
+                                               index->getBaseEmbDim());
+        }
+        else
+        {
+
+            e_d = 0;
+        }
+        if (alpha != 1)
+        {
+
+            s_d = index->get_S_Dist()->compare(index->getQueryLocData() + (size_t)qnode * index->getBaseLocDim(),
+                                               index->getBaseLocData() + (size_t)enterpoint->GetId() * index->getBaseLocDim(),
+                                               index->getBaseLocDim());
+        }
+        else
+        {
+            s_d = 0;
+        }
+        float d = alpha * e_d + (1 - alpha) * s_d;
+
+        index->addDistCount();
+        result.emplace(enterpoint, d);
+        candidates.emplace(enterpoint, d);
+        visited_list->Reset();
+        visited_list->MarkAsVisited(enterpoint->GetId());
+
+        while (!candidates.empty())
+        {
+            const Index::BS4CloserFirst &candidate = candidates.top();
+            float lower_bound = result.top().GetDistance();
+            if (candidate.GetDistance() > lower_bound)
+                break;
+
+            Index::BS4Node *candidate_node = candidate.GetNode();
+            std::unique_lock<std::mutex> lock(candidate_node->GetAccessGuard());
+            const std::vector<Index::BS4Node *> &neighbors = candidate_node->GetFriends(level);
+            candidates.pop();
+            index->addHopCount();
+            for (const auto &neighbor : neighbors)
+            {
+                int id = neighbor->GetId();
+                if (visited_list->NotVisited(id))
+                {
+                    visited_list->MarkAsVisited(id);
+                    if (alpha != 0)
+                    {
+                        e_d = index->get_E_Dist()->compare(index->getQueryEmbData() + (size_t)qnode * index->getBaseEmbDim(),
+                                                           index->getBaseEmbData() + (size_t)neighbor->GetId() * index->getBaseEmbDim(),
+                                                           index->getBaseEmbDim());
+                    }
+                    else
+                    {
+                        e_d = 0;
+                    }
+                    if (alpha != 1)
+                    {
+                        s_d = index->get_S_Dist()->compare(index->getQueryLocData() + (size_t)qnode * index->getBaseLocDim(),
+                                                           index->getBaseLocData() + (size_t)neighbor->GetId() * index->getBaseLocDim(),
+                                                           index->getBaseLocDim());
+                    }
+                    else
+                    {
+                        s_d = 0;
+                    }
+                    d = alpha * e_d + (1 - alpha) * s_d;
+
+                    index->addDistCount();
+                    if (result.size() < L || result.top().GetDistance() > d)
+                    {
+                        result.emplace(neighbor, d);
+                        candidates.emplace(neighbor, d);
+                        if (result.size() > L)
+                            result.pop();
+                    }
+                }
+            }
+        }
+    }
 
     void ComponentSearchRouteDEG::SearchAtLayer(unsigned qnode, Index::DEGNode *enterpoint, int level,
-                                                     Index::VisitedList *visited_list,
-                                                     std::priority_queue<Index::DEG_FurtherFirst> &result)
+                                                Index::VisitedList *visited_list,
+                                                std::priority_queue<Index::DEG_FurtherFirst> &result)
     {
         const auto L = index->getParam().get<unsigned>("L_search");
 
         std::priority_queue<Index::DEG_CloserFirst> candidates;
         float alpha = index->get_alpha();
         visited_list->Reset();
+
         bool m_first = false;
 
         for (int i = 0; i < index->enterpoint_set.size(); i++)
@@ -474,6 +628,7 @@ namespace stkq
 
             result.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
             candidates.emplace(cur_node, cur_e_d, cur_s_d, cur_dist);
+
             visited_list->MarkAsVisited(cur_node->GetId());
         }
 
@@ -486,32 +641,51 @@ namespace stkq
 
             Index::DEGNode *candidate_node = candidate.GetNode();
             std::unique_lock<std::mutex> lock(candidate_node->GetAccessGuard());
-            // const std::vector<std::shared_ptr<Index::DEGEdge>> &neighbors = candidate_node->GetFriends();
             std::vector<Index::DEGSimpleNeighbor> &neighbors = candidate_node->GetSearchFriends();
             candidates.pop();
             index->addHopCount();
             for (const auto &neighbor : neighbors)
             {
                 int neighbor_id = neighbor.id_;
-                const std::vector<std::pair<float, float>> &use_range = neighbor.available_range;
+                // const std::vector<std::pair<float, float>> &use_range = neighbor.available_range;
+                // bool search_flag = false;
+                // for (int i = 0; i < use_range.size(); i++)
+                // {
+                //     if (alpha >= use_range[i].first && alpha <= use_range[i].second)
+                //     {
+                //         search_flag = true;
+                //         break;
+                //     }
+                //     if (alpha < use_range[i].first)
+                //     {
+                //         break;
+                //     }
+                //     if (alpha > use_range[i].second)
+                //     {
+                //         continue;
+                //     }
+                // }
+                const std::vector<std::pair<int8_t, int8_t>> &use_range = neighbor.active_range;
                 bool search_flag = false;
                 for (int i = 0; i < use_range.size(); i++)
                 {
-                    if (alpha >= use_range[i].first && alpha <= use_range[i].second)
+                    if (alpha * 100 >= use_range[i].first && alpha * 100 <= use_range[i].second)
                     {
                         search_flag = true;
                         break;
                     }
-                    if (alpha < use_range[i].first)
+                    if (alpha * 100 < use_range[i].first)
                     {
                         break;
                     }
-                    if (alpha > use_range[i].second)
+                    if (alpha * 100 > use_range[i].second)
                     {
                         continue;
                     }
                 }
-                
+
+                // search_flag = true;
+
                 if (search_flag)
                 {
                     if (visited_list->NotVisited(neighbor_id))

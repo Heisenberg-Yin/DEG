@@ -21,7 +21,7 @@ namespace stkq
     public:
         explicit ComponentLoad(Index *index) : Component(index) {}
 
-        virtual void LoadInner(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *ground_file, Parameters &parameters);
+        virtual void LoadInner(char *data_emb_file, char *data_loc_file, char *query_emb_file, char *query_loc_file, char *query_alpha_file, char *ground_file, Parameters &parameters);
 
         // virtual void load_partition(char *partition_file);
     };
@@ -33,6 +33,32 @@ namespace stkq
         explicit ComponentInit(Index *index) : Component(index) {}
 
         virtual void InitInner() = 0;
+    };
+
+    class ComponentInitBS4 : public ComponentInit
+    {
+    public:
+        explicit ComponentInitBS4(Index *index) : ComponentInit(index) {}
+
+        void InitInner() override;
+
+    private:
+        void SetConfigs();
+
+        void Build();
+
+        void Merge();
+
+        static int GetRandomSeedPerThread();
+
+        int GetRandomNodeLevel();
+
+        void InsertNode(Index::BS4Node *qnode, Index::VisitedList *visited_list, unsigned iter);
+
+        void SearchAtLayer(Index::BS4Node *qnode, Index::BS4Node *enterpoint, int level,
+                           Index::VisitedList *visited_list, std::priority_queue<Index::BS4FurtherFirst> &result);
+
+        void Link(Index::BS4Node *source, Index::BS4Node *target, int level);
     };
 
     class ComponentInitRTree : public ComponentInit
@@ -127,7 +153,6 @@ namespace stkq
 
         void Link(Index::HnswNode *source, Index::HnswNode *target, int level);
     };
-
 
     class ComponentInitHNSW : public ComponentInit
     {
@@ -348,6 +373,12 @@ namespace stkq
         }
     };
 
+    class ComponentPrune : public Component
+    {
+    public:
+        explicit ComponentPrune(Index *index) : Component(index) {}
+    };
+
     class ComponentPruneHeuristic : public ComponentPrune
     {
     public:
@@ -394,6 +425,43 @@ namespace stkq
             std::unordered_map<int, Index::HnswNode *>().swap(tmp);
             // 这两行代码通过交换技巧来清空 pool 向量和 tmp 哈希表 一种常用的释放容器占用内存的方法
         }
+void Hnsw2Neighbor(unsigned query, unsigned range, std::priority_queue<Index::BS4FurtherFirst> &result)
+        {
+            // 它的作用是对给定节点的邻居列表进行剪枝，以选择最优的邻居
+            int n = result.size();
+            std::vector<Index::SimpleNeighbor> pool(n);
+            // 创建一个向量 pool 用于存储与查询节点距离最近的邻居
+            std::unordered_map<int, Index::BS4Node *> tmp;
+
+            for (int i = n - 1; i >= 0; i--)
+            {
+                Index::BS4FurtherFirst f = result.top(); // 最大堆
+                pool[i] = Index::SimpleNeighbor(f.GetNode()->GetId(), f.GetDistance());
+                tmp[f.GetNode()->GetId()] = f.GetNode();
+                result.pop();
+            }
+
+            boost::dynamic_bitset<> flags; // 创建一个动态位集合，通常用于标记状态或记录已访问的节点
+
+            auto *cut_graph_ = new Index::SimpleNeighbor[index->getBaseLen() * range]; // 动态分配一个数组，用于存储剪枝后的图数据, 类似前向星链
+
+            PruneInner(query, range, flags, pool, cut_graph_);
+
+            for (unsigned j = 0; j < range; j++)
+            {
+                if (cut_graph_[range * query + j].distance == -1)
+                    break;
+
+                result.push(Index::BS4FurtherFirst(tmp[cut_graph_[range * query + j].id], cut_graph_[range * query + j].distance));
+            }
+
+            delete[] cut_graph_;
+
+            std::vector<Index::SimpleNeighbor>().swap(pool);
+            std::unordered_map<int, Index::BS4Node *>().swap(tmp);
+            // 这两行代码通过交换技巧来清空 pool 向量和 tmp 哈希表 一种常用的释放容器占用内存的方法
+        }
+                
     };
 
     // graph conn
@@ -635,7 +703,7 @@ namespace stkq
                         // std::vector<Index::DEGNeighbor> &picked);
                         std::vector<Index::DEGNeighbor> &cut_graph_);
 
-        void Geo2Neighbor(unsigned qnode, unsigned range, std::vector<Index::DEGNNDescentNeighbor> &pool, std::vector<Index::DEGNeighbor> &result)
+        void DEG2Neighbor(unsigned qnode, unsigned range, std::vector<Index::DEGNNDescentNeighbor> &pool, std::vector<Index::DEGNeighbor> &result)
         {
             PruneInner(pool, range, result);
         };
@@ -647,6 +715,21 @@ namespace stkq
         explicit ComponentSearchRoute(Index *index) : Component(index) {}
 
         virtual void RouteInner(unsigned query, std::vector<Index::Neighbor> &pool, std::vector<unsigned> &res) = 0;
+    };
+
+    class ComponentSearchRouteBS4 : public ComponentSearchRoute
+    {
+    public:
+        explicit ComponentSearchRouteBS4(Index *index) : ComponentSearchRoute(index) {}
+
+        void RouteInner(unsigned query, std::vector<Index::Neighbor> &pool, std::vector<unsigned> &res) override;
+
+    private:
+        // void SearchById_(unsigned query, Index::HnswNode* cur_node, float cur_dist, size_t k,
+        //                  size_t ef_search, std::vector<std::pair<Index::HnswNode*, float>> &result);
+        void SearchAtLayer(unsigned qnode, Index::BS4Node *enterpoint, int level,
+                           Index::VisitedList *visited_list,
+                           std::priority_queue<Index::BS4FurtherFirst> &result);
     };
 
     class ComponentSearchRouteGreedy : public ComponentSearchRoute
@@ -791,15 +874,6 @@ namespace stkq
 
         void SearchEntryInner(unsigned query, std::vector<Index::Neighbor> &pool) override;
     };
-
-    // // search route
-    // class ComponentSearchRoute : public Component {
-    // public:
-    //     explicit ComponentSearchRoute(Index *index) : Component(index) {}
-
-    //     virtual void RouteInner(unsigned query, std::vector<Index::Neighbor> &pool, std::vector<unsigned> &res) = 0;
-    // };
-
 }
 
 #endif

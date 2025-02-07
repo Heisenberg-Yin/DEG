@@ -410,124 +410,116 @@ namespace stkq
         long long test_sum = 0;
     };
 
-    // class Mbr
-    // {
-    // public:
-    //     static const unsigned DIM = 2;
-    //     std::vector<std::vector<float>> coord;
-    //     std::vector<unsigned> object_ids;
-    //     Mbr()
-    //     {
-    //         init();
-    //     };
+    class baseline4
+    {
+    public:
+        class BS4Node
+        {
+        public:
+            explicit BS4Node(int id, int level, size_t max_m, size_t max_m0)
+                : id_(id), level_(level), max_m_(max_m), max_m0_(max_m0), friends_at_layer_(level + 1)
+            {
+                for (int i = 1; i <= level; ++i)
+                    friends_at_layer_[i].reserve(max_m_ + 1);
 
-    //     Mbr(float xmin, float xmax, float ymin, float ymax)
-    //     {
-    //         std::vector<float> x_coor = {xmin, xmax};
-    //         std::vector<float> y_coor = {ymin, ymax};
-    //         coord.emplace_back(x_coor);
-    //         coord.emplace_back(y_coor);
-    //     };
+                friends_at_layer_[0].reserve(max_m0_ + 1);
+            }
 
-    //     void init()
-    //     {
-    //         std::vector<float> v = {INF_P, INF_N};
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //             coord.emplace_back(v);
-    //     };
-    //     float getArea() const
-    //     {
-    //         float area = 1;
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //             area *= coord[dim][1] - coord[dim][0];
-    //         return area;
-    //     };
+            inline size_t GetId() const { return (size_t)id_; }
+            inline void SetId(int id) { id_ = id; }
+            inline int GetLevel() const { return level_; }
+            inline void SetLevel(int level) { level_ = level; }
+            inline size_t GetMaxM() const { return max_m_; }
+            inline size_t GetMaxM0() const { return max_m0_; }
 
-    //     float getMargin() const
-    //     {
-    //         float margin = 0;
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //             margin += coord[dim][1] - coord[dim][0];
-    //         return margin;
-    //     };
+            inline std::vector<BS4Node *> &GetFriends(int level) { return friends_at_layer_[level]; }
+            inline void SetFriends(int level, std::vector<BS4Node *> &new_friends)
+            {
+                if (level >= friends_at_layer_.size())
+                    friends_at_layer_.resize(level + 1);
+                friends_at_layer_[level].swap(new_friends);
+            }
 
-    //     void enlarge(Mbr &add)
-    //     {
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //         {
-    //             coord[dim][0] = std::min(coord[dim][0], add.coord[dim][0]);
-    //             coord[dim][1] = std::max(coord[dim][1], add.coord[dim][1]);
-    //         }
-    //     };
+            inline std::mutex &GetAccessGuard() { return access_guard_; }
 
-    //     inline float getCenter(size_t dim)
-    //     {
-    //         return (coord[dim][0] + coord[dim][1]) * 0.5;
-    //     }
+            // 1. The list of friends is sorted
+            // 2. bCheckForDup == true addFriend checks for duplicates using binary searching
+            inline void AddFriends(BS4Node *element, bool bCheckForDup)
+            {
+                std::unique_lock<std::mutex> lock(access_guard_);
+                if (bCheckForDup)
+                {
+                    auto it = std::lower_bound(friends_at_layer_[0].begin(), friends_at_layer_[0].end(), element);
+                    if (it == friends_at_layer_[0].end() || (*it) != element)
+                    {
+                        friends_at_layer_[0].insert(it, element);
+                    }
+                }
+                else
+                {
+                    friends_at_layer_[0].push_back(element);
+                }
+            }
 
-    //     inline bool isPoint()
-    //     {
-    //         for (size_t i = 0; i < DIM; i++)
-    //         {
-    //             if (coord[i][0] != coord[i][1])
-    //                 return false;
-    //         }
-    //         return true;
-    //     }
+        private:
+            int id_;
+            int level_;
+            size_t max_m_;
+            size_t max_m0_;
+            std::vector<std::vector<BS4Node *>> friends_at_layer_;
+            std::mutex access_guard_;
+        };
 
-    //     bool operator==(const Mbr &m) const
-    //     {
-    //         return m.coord == coord;
-    //     }
+        class BS4FurtherFirst
+        {
+        public:
+            BS4FurtherFirst(BS4Node *node, float distance) : node_(node), distance_(distance) {}
+            inline float GetDistance() const { return distance_; }
+            inline BS4Node *GetNode() const { return node_; }
+            bool operator<(const BS4FurtherFirst &n) const
+            {
+                return (distance_ < n.GetDistance());
+            }
 
-    //     static Mbr getMbr(Mbr &mbr1, Mbr &mbr2)
-    //     {
-    //         Mbr mbr;
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //         {
-    //             mbr.coord[dim][0] = std::min(mbr1.coord[dim][0], mbr2.coord[dim][0]);
-    //             mbr.coord[dim][1] = std::max(mbr1.coord[dim][1], mbr2.coord[dim][1]);
-    //         }
-    //         return mbr;
-    //     };
-    //     // get the overlap area of two MBRs
-    //     static float getOverlap(Mbr &mbr1, Mbr &mbr2)
-    //     {
-    //         float overlap = 1;
-    //         for (size_t dim = 0; dim < DIM; dim++)
-    //         {
-    //             float maxMin = std::max(mbr1.coord[dim][0], mbr2.coord[dim][0]);
-    //             float minMax = std::min(mbr1.coord[dim][1], mbr2.coord[dim][1]);
-    //             if (maxMin >= minMax)
-    //                 return 0;
-    //             overlap *= minMax - maxMin;
-    //         }
-    //         return overlap;
-    //     };
+        private:
+            BS4Node *node_;
+            float distance_;
+            // 距离较小的节点会被视为“优先级较低” 因此 FurtherFirst 实际上是用于构建最大堆的
+        };
 
-    //     static bool isOverlap(Mbr &mbr1, Mbr &mbr2)
-    //     {
-    //         if (mbr2.isPoint())
-    //         {
-    //             for (size_t dim = 0; dim < DIM; dim++)
-    //             {
-    //                 if (mbr2.coord[dim][1] > mbr1.coord[dim][1] || mbr2.coord[dim][0] < mbr1.coord[dim][0])
-    //                 {
-    //                     return false;
-    //                 }
-    //             }
-    //         }
-    //         else
-    //         {
-    //             float dis = Mbr::getOverlap(mbr1, mbr2);
-    //             if (dis == 0)
-    //             {
-    //                 return false;
-    //             }
-    //         }
-    //         return true;
-    //     };
-    // };
+        class BS4CloserFirst
+        {
+        public:
+            BS4CloserFirst(BS4Node *node, float distance) : node_(node), distance_(distance) {}
+            inline float GetDistance() const { return distance_; }
+            inline BS4Node *GetNode() const { return node_; }
+            bool operator<(const BS4CloserFirst &n) const
+            {
+                return (distance_ > n.GetDistance());
+            }
+
+        private:
+            BS4Node *node_;
+            float distance_;
+            // 距离较小的节点会被视为“优先级较高” 因此 CloserFirst 用于构建最小堆
+        };
+
+        // typedef typename std::pair<BS4Node *, float> IdDistancePair;
+        // struct IdDistancePairMinHeapComparer
+        // {
+        //     bool operator()(const IdDistancePair &p1, const IdDistancePair &p2) const
+        //     {
+        //         return p1.second > p2.second;
+        //     }
+        // };
+        // typedef typename boost::heap::d_ary_heap<IdDistancePair, boost::heap::arity<4>, boost::heap::compare<IdDistancePairMinHeapComparer>> IdDistancePairMinHeap;
+        // // IdDistancePairMinHeap 是一个 4-叉最小堆，使用 boost::heap::d_ary_heap 实现，并通过 IdDistancePairMinHeapComparer 来比较元素
+        // // 这样构造的堆会将最小的距离元素保持在顶部
+        std::vector<BS4Node *> baseline4_enterpoint_; // = nullptr;
+        std::vector<std::vector<BS4Node *>> baseline4_nodes_;
+        std::vector<int> baseline4_max_level_;
+        mutable std::mutex bs4_max_level_guard_;
+    };
 
     class DEG
     {
@@ -560,10 +552,12 @@ namespace stkq
         {
             unsigned id_;
             // unsigned layer_;
-            std::vector<std::pair<float, float>> available_range;
+            // std::vector<std::pair<float, float>> available_range;
+            std::vector<std::pair<int8_t, int8_t>> active_range;
 
             DEGSimpleNeighbor() = default;
-            DEGSimpleNeighbor(unsigned id, std::vector<std::pair<float, float>> range) : id_{id}, available_range(range) {}
+            // DEGSimpleNeighbor(unsigned id, std::vector<std::pair<float, float>> range) : id_{id}, available_range(range) {}
+            DEGSimpleNeighbor(unsigned id, std::vector<std::pair<int8_t, int8_t>> range) : id_{id}, active_range(range) {}
         };
 
         struct DEGNNDescentNeighbor
@@ -588,19 +582,20 @@ namespace stkq
         class DEGNode
         {
         public:
-            explicit DEGNode(int id, int level, int max_m)
-                : id_(id), level_(level), max_m_(max_m) //, friends_at_layer_(level + 1)
+            explicit DEGNode(int id, int max_m)
+                : id_(id), max_m_(max_m)
             {
-                friends.reserve(max_m_ + 1);
-                // for (int i = 0; i <= level; ++i)
-                // friends_at_layer_[i].reserve(max_m_ + 1);
+                // friends.reserve(max_m_ + 1);
+                // friends_for_search.reserve(max_m_ + 1);
+                friends.clear();
+                friends_for_search.clear();
             }
 
             inline int GetId() const { return id_; }
             inline void SetId(int id) { id_ = id; }
             inline int GetMaxM() const { return max_m_; }
-            inline int GetLevel() const { return level_; }
-            inline void SetLevel(int level) { level_ = level; }
+            // inline int GetLevel() const { return level_; }
+            // inline void SetLevel(int level) { level_ = level; }
             inline void SetMaxM(int max_m) { max_m_ = max_m; }
             inline std::vector<DEGNeighbor> &GetFriends() { return friends; }
 
@@ -620,7 +615,7 @@ namespace stkq
 
         private:
             int id_;
-            int level_;
+            // int level_;
             size_t max_m_;
             std::vector<DEGNeighbor> friends;
             std::vector<DEGSimpleNeighbor> friends_for_search;
@@ -632,8 +627,8 @@ namespace stkq
             std::mutex lock; // 互斥锁 用于并发访问控制
             std::vector<DEGNNDescentNeighbor> pool;
             std::vector<DEGNNDescentNeighbor> outlier; // 存储邻居节点的优先队列 最小堆
-            unsigned M;                                     // 记录pool的最大大小, 也就是candidate边数
-            unsigned Q;                                     // 记录pool在update的过程中candidate set需要考虑的layer 也即quality result
+            unsigned M;                                // 记录pool的最大大小, 也就是candidate边数
+            unsigned Q;                                // 记录pool在update的过程中candidate set需要考虑的layer 也即quality result
             unsigned num_layer;
             unsigned use_range;
             // unsigned *pstart;
@@ -742,9 +737,6 @@ namespace stkq
                 }
                 num_layer = l;
             }
-
-           
-           
 
             void insert(unsigned id, float e_dist, float s_dist)
             {
@@ -915,7 +907,7 @@ namespace stkq
                 num_layer = l;
             }
         };
-        
+
         typedef std::vector<skyline_descent> SkylineDEG;
         SkylineDEG skylineDEG_;
 
@@ -1073,7 +1065,7 @@ namespace stkq
         float *emb_center, *loc_center;
     };
 
-    class Index : public NNDescent, public NSW, public HNSW, public SSG, public NSG, public DEG
+    class Index : public NNDescent, public NSW, public HNSW, public SSG, public NSG, public DEG, public baseline4
     {
     public:
         explicit Index(float max_emb_dist, float max_spatial_dist)
@@ -1224,6 +1216,16 @@ namespace stkq
         void setQueryLocData(float *queryLocData)
         {
             query_loc_data_ = queryLocData;
+        }
+
+        float *getQueryWeightData() const
+        {
+            return query_alpha_;
+        }
+
+        void setQueryWeightData(float *queryWeightData)
+        {
+            query_alpha_ = queryWeightData;
         }
 
         unsigned int *getGroundData() const
@@ -1495,7 +1497,7 @@ namespace stkq
         bool debug = false;
 
     private:
-        float *base_emb_data_, *base_loc_data_, *query_emb_data_, *query_loc_data_;
+        float *base_emb_data_, *base_loc_data_, *query_emb_data_, *query_loc_data_, *query_alpha_;
         unsigned *ground_data_;
 
         unsigned base_len_, query_len_, ground_len_;
